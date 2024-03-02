@@ -9,9 +9,27 @@ pub struct Model {
     val: bool,
 }
 
+#[wasm_bindgen]
+pub struct State {}
+
+#[wasm_bindgen]
+pub enum Direction {
+    Up,
+    Down,
+}
+
+#[wasm_bindgen]
 impl Model {
     pub fn new() -> Model {
         Model { val: false }
+    }
+
+    pub fn direction(&self, state: State) -> bool {
+        self.val
+    }
+
+    pub fn update(&mut self, state: State, direction: Direction) {
+        self.val = !self.val;
     }
 }
 

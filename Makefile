@@ -13,7 +13,7 @@ all: build
 .PHONY: build
 build:
 	@echo "Building wasm-pack..."
-	wasm-pack build
+	wasm-pack build --target no-modules
 
 .PHONY: clean
 clean:
