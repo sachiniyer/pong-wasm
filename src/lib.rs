@@ -10,15 +10,6 @@ pub struct Model {
 }
 
 #[wasm_bindgen]
-pub struct State {}
-
-#[wasm_bindgen]
-pub enum Direction {
-    Up,
-    Down,
-}
-
-#[wasm_bindgen]
 impl Model {
     pub fn new() -> Model {
         Model { val: false }
@@ -28,12 +19,21 @@ impl Model {
         self.val
     }
 
-    pub fn update(&mut self, state: State, direction: Direction) {
+    pub fn update(&mut self, state: State, direction: bool) {
         self.val = !self.val;
     }
 }
 
-/// Run entry point for the main thread.
+#[wasm_bindgen]
+pub struct State {}
+
+#[wasm_bindgen]
+impl State {
+    pub fn new() -> State {
+        State {}
+    }
+}
+
 #[wasm_bindgen]
 pub fn startup() {
     let worker_handle = Rc::new(RefCell::new(Worker::new("./worker.js").unwrap()));
