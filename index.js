@@ -1,3 +1,15 @@
+const { startup } = wasm_bindgen;
+
+async function run_wasm() {
+  await wasm_bindgen();
+
+  console.log("index.js loaded");
+
+  startup();
+}
+
+run_wasm();
+
 const canvas = document.getElementById("pongCanvas");
 const context = canvas.getContext("2d");
 let canvasWidth = window.innerWidth;
@@ -126,6 +138,8 @@ function draw() {
   p1.draw();
   p2.draw();
   ball.draw();
+  context.font = "30px Hack";
+  context.fillText(title, canvas.width / 2 - 50, 50);
 }
 
 function reset() {
