@@ -2,9 +2,7 @@ const { startup } = wasm_bindgen;
 
 async function run_wasm() {
   await wasm_bindgen();
-
   console.log("index.js loaded");
-
   startup();
 }
 
@@ -19,30 +17,33 @@ canvas.height = canvasHeight;
 
 const title = "Pong";
 
+const granularity = 200;
+
+let widthStep = () => canvas.width / granularity;
+let heightStep = () => canvas.height / granularity;
+
 const Direction = {
   UP: "UP",
   DOWN: "DOWN",
-  LEFT: "LEFT",
-  RIGHT: "RIGHT",
 };
 
 let paddleConfig = {
-  width: 0.01,
-  height: 0.2,
-  speed: 0.02,
+  width: 1,
+  height: 20,
+  speed: 3,
 };
 
 let ballConfig = {
-  size: 0.02,
-  dx: 0.005,
-  dy: 0.005,
+  size: 2,
+  dx: 2.5,
+  dy: 2.5,
 };
 
 class Paddle {
   constructor() {
-    this.w = canvas.width * paddleConfig.width;
-    this.h = canvas.height * paddleConfig.height;
-    this.speed = canvas.height * paddleConfig.speed;
+    this.w = widthStep() * paddleConfig.width;
+    this.h = heightStep() * paddleConfig.height;
+    this.speed = heightStep() * paddleConfig.speed;
   }
 
   draw(x, y) {
@@ -51,9 +52,9 @@ class Paddle {
   }
 
   reset() {
-    this.w = canvas.width * paddleConfig.width;
-    this.h = canvas.height * paddleConfig.height;
-    this.speed = canvas.height * paddleConfig.speed;
+    this.w = widthStep() * paddleConfig.width;
+    this.h = heightStep() * paddleConfig.height;
+    this.speed = heightStep() * paddleConfig.speed;
   }
 }
 
@@ -61,9 +62,9 @@ class Ball {
   constructor() {
     this.x = canvas.width / 2;
     this.y = canvas.height / 2;
-    this.size = Math.min(canvas.width, canvas.height) * ballConfig.size;
-    this.dx = Math.min(canvas.width, canvas.height) * ballConfig.dx;
-    this.dy = Math.min(canvas.width, canvas.height) * ballConfig.dy;
+    this.size = heightStep() * ballConfig.size;
+    this.dx = widthStep() * ballConfig.dx;
+    this.dy = (heightStep() * ballConfig.dy) / 2;
   }
 
   update() {
@@ -82,10 +83,9 @@ class Ball {
   reset() {
     this.x = canvas.width / 2;
     this.y = canvas.height / 2;
-
-    this.size = Math.min(canvas.width, canvas.height) * ballConfig.size;
-    this.dx = Math.min(canvas.width, canvas.height) * ballConfig.dx;
-    this.dy = Math.min(canvas.width, canvas.height) * ballConfig.dy;
+    this.size = heightStep() * ballConfig.size;
+    this.dx = widthStep() * ballConfig.dx;
+    this.dy = (heightStep() * ballConfig.dy) / 2;
   }
 }
 
@@ -118,13 +118,13 @@ let ball = new Ball();
 
 let p1 = new Player(
   () => 0,
-  () => canvas.height / 2 - (canvas.height * paddleConfig.height) / 2,
+  () => canvas.height / 2,
   () => 100,
 );
 
 let p2 = new Player(
-  () => canvas.width - canvas.width * paddleConfig.width,
-  () => canvas.height / 2 - (canvas.height * paddleConfig.height) / 2,
+  () => canvas.width - widthStep() * paddleConfig.width,
+  () => canvas.height / 2,
   () => canvas.width - 100,
 );
 
@@ -158,7 +158,7 @@ function handleBallCollisions() {
   ) {
     ball.dx = -ball.dx;
     let deltaY = ball.y - (p1.y + p1.paddle.h / 2);
-    ball.dy = deltaY * 0.2;
+    ball.dy = deltaY * 0.25;
   }
   if (
     ball.x + ball.size >= p2.x &&
@@ -167,7 +167,7 @@ function handleBallCollisions() {
   ) {
     ball.dx = -ball.dx;
     let deltaY = ball.y - (p2.y + p2.paddle.h / 2);
-    ball.dy = deltaY * 0.2;
+    ball.dy = deltaY * 0.25;
   }
 }
 
@@ -176,11 +176,11 @@ function update() {
 
   handleBallCollisions();
 
-  if (ball.x - ball.size <= 0) {
+  if (ball.x <= 0) {
     p2.score++;
     reset();
   }
-  if (ball.x + ball.size >= canvas.width) {
+  if (ball.x >= canvas.width) {
     p1.score++;
     reset();
   }
