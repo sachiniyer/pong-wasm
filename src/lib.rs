@@ -53,4 +53,22 @@ impl State {
 pub fn startup() {
     let worker_handle = Rc::new(RefCell::new(Worker::new("./worker.js").unwrap()));
     console::log_1(&"Created a new worker from within Wasm".into());
+
+    let callback = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
+        console::log_1(&"Received a message from the worker".into());
+        console::log_1(&event.data());
+    }) as Box<dyn FnMut(_)>);
+
+    worker_handle
+        .borrow()
+        .add_event_listener_with_callback("message", callback.as_ref().unchecked_ref())
+        .unwrap();
+
+    std::mem::forget(callback);
+}
+
+#[wasm_bindgen]
+pub fn handle_state(state: String) {
+    console::log_1(&"Received a state".into());
+    console::log_1(&state.len().into());
 }

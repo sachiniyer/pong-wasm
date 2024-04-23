@@ -1,9 +1,16 @@
 const { startup } = wasm_bindgen;
 
+let worker;
 async function run_wasm() {
   await wasm_bindgen();
   console.log("index.js loaded");
   startup();
+
+  worker = new Worker("worker.js");
+  worker.postMessage("getGameBoard");
+  worker.onmessage = function (e) {
+    console.log(e.data);
+  };
 }
 
 run_wasm();
@@ -17,10 +24,10 @@ canvas.height = canvasHeight;
 
 const title = "Pong";
 
-const granularity = 200;
+const QUADRANTS = 200;
 
-let widthStep = () => canvas.width / granularity;
-let heightStep = () => canvas.height / granularity;
+let widthStep = () => canvas.width / QUADRANTS;
+let heightStep = () => canvas.height / QUADRANTS;
 
 const Direction = {
   UP: "UP",
@@ -281,10 +288,52 @@ window.addEventListener("resize", function () {
   ball.reset();
 });
 
+function getGameBoard() {
+  let gameBoard = Array(QUADRANTS)
+    .fill()
+    .map(() => Array(QUADRANTS).fill(0));
+
+  let p1X = Math.floor(p1.x / widthStep());
+  let p1Y = Math.floor(p1.y / heightStep());
+  let p1W = Math.floor(p1.paddle.w / widthStep());
+  let p1H = Math.floor(p1.paddle.h / heightStep());
+
+  let p2X = Math.floor(p2.x / widthStep());
+  let p2Y = Math.floor(p2.y / heightStep());
+  let p2W = Math.floor(p2.paddle.w / widthStep());
+  let p2H = Math.floor(p2.paddle.h / heightStep());
+
+  let ballX = Math.floor(ball.x / widthStep());
+  let ballY = Math.floor(ball.y / heightStep());
+  let ballSize = Math.floor(ball.size / heightStep());
+
+  for (let i = 0; i < QUADRANTS; i++) {
+    for (let j = 0; j < QUADRANTS; j++) {
+      if (i >= p1X && i <= p1X + p1W && j >= p1Y && j <= p1Y + p1H) {
+        gameBoard[i][j] = 1;
+      } else if (i >= p2X && i <= p2X + p2W && j >= p2Y && j <= p2Y + p2H) {
+        gameBoard[i][j] = 2;
+      } else if (
+        i >= ballX - ballSize &&
+        i <= ballX + ballSize &&
+        j >= ballY - ballSize &&
+        j <= ballY + ballSize
+      ) {
+        gameBoard[i][j] = 3;
+      }
+    }
+  }
+
+  return gameBoard;
+}
+
 function gameLoop() {
   update();
   draw();
-  requestAnimationFrame(gameLoop);
+  if (worker) {
+    worker.postMessage(getGameBoard());
+  }
+  setTimeout(gameLoop, 50);
 }
 
 gameLoop();
