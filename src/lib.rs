@@ -4,6 +4,14 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::{console, Worker};
 
+/*
+ * Use handle_state to train RL model
+ *
+ * Store weights in browser Storage (localStorage)
+ *
+ * On inference call, take state and publish results.
+ */
+
 struct Action {
     up: i8,
     down: i8,
@@ -15,8 +23,6 @@ const ACTION: Action = Action {
     down: -1,
     stay: 0,
 };
-
-let calls = 0;
 
 #[wasm_bindgen]
 pub struct State {
@@ -60,20 +66,8 @@ impl Model {
 
 #[wasm_bindgen]
 pub fn startup() {
-    let worker_handle = Rc::new(RefCell::new(Worker::new("./worker.js").unwrap()));
+    let _worker_handle = Rc::new(RefCell::new(Worker::new("./worker.js").unwrap()));
     console::log_1(&"Created a new worker from within Wasm".into());
-
-    let callback = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
-        console::log_1(&"Received a message from the worker".into());
-        console::log_1(&event.data());
-    }) as Box<dyn FnMut(_)>);
-
-    worker_handle
-        .borrow()
-        .add_event_listener_with_callback("message", callback.as_ref().unchecked_ref())
-        .unwrap();
-
-    std::mem::forget(callback);
 }
 
 #[wasm_bindgen]
