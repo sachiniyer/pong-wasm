@@ -13,14 +13,27 @@ async function initialize() {
   await wasm_bindgen("./pkg/pong_wasm_bg.wasm");
   console.log("Worker Initialized");
 
-  var model = Model.new();
-  model.update(State.new(0.0, 0.0), ACTION.up);
+  // var model = Model.new();
+  // model.update(State.new(0.0, 0.0), ACTION.up);
 }
 
-initialize();
+function send_state(state) {
+  let data = state;
+  let dim = state.length;
+  handle_state(State.new(data.flat(), dim));
+}
 
 self.onmessage = async (e) => {
-  handle_state(String(e.data));
-
-  self.postMessage({ type: "pong", message: "pong" });
+  switch (e.data.type) {
+    case "ping":
+      self.postMessage({ type: "pong", message: "pong" });
+      break;
+    case "state":
+      send_state(e.data.state);
+      break;
+    default:
+      break;
+  }
 };
+
+initialize();

@@ -291,7 +291,7 @@ window.addEventListener("resize", function () {
 function getGameBoard() {
   let gameBoard = Array(QUADRANTS)
     .fill()
-    .map(() => Array(QUADRANTS).fill(0));
+    .map(() => Array(QUADRANTS).fill(false));
 
   let p1X = Math.floor(p1.x / widthStep());
   let p1Y = Math.floor(p1.y / heightStep());
@@ -310,20 +310,19 @@ function getGameBoard() {
   for (let i = 0; i < QUADRANTS; i++) {
     for (let j = 0; j < QUADRANTS; j++) {
       if (i >= p1X && i <= p1X + p1W && j >= p1Y && j <= p1Y + p1H) {
-        gameBoard[i][j] = 1;
+        gameBoard[i][j] = true;
       } else if (i >= p2X && i <= p2X + p2W && j >= p2Y && j <= p2Y + p2H) {
-        gameBoard[i][j] = 2;
+        gameBoard[i][j] = true;
       } else if (
         i >= ballX - ballSize &&
         i <= ballX + ballSize &&
         j >= ballY - ballSize &&
         j <= ballY + ballSize
       ) {
-        gameBoard[i][j] = 3;
+        gameBoard[i][j] = true;
       }
     }
   }
-
   return gameBoard;
 }
 
@@ -331,7 +330,7 @@ function gameLoop() {
   update();
   draw();
   if (worker) {
-    worker.postMessage(getGameBoard());
+    worker.postMessage({ type: "state", state: getGameBoard() });
   }
   setTimeout(gameLoop, 50);
 }
