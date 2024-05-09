@@ -12,9 +12,6 @@ const ACTION = {
 async function initialize() {
   await wasm_bindgen("./pkg/pong_wasm_bg.wasm");
   console.log("Worker Initialized");
-
-  // var model = Model.new();
-  // model.update(State.new(0.0, 0.0), ACTION.up);
 }
 
 function send_state(state) {

@@ -1,15 +1,14 @@
 use candle_core::{Device, Result, Tensor};
-use std::cell::RefCell;
-use std::rc::Rc;
+use serde::{Deserialize, Serialize};
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, Worker};
 
 /*
- * Use handle_state to train RL model
- *
- * Store weights in browser Storage (localStorage)
- *
- * On inference call, take state and publish results.
+ * PLAN:
+ * - Use handle_state to take data for RL model
+ * - Store weights in browser Storage (localStorage)
+ * - On inference call, take state and publish results.
  */
 
 struct Action {
@@ -24,6 +23,7 @@ const ACTION: Action = Action {
     stay: 0,
 };
 
+#[derive(Serialize, Deserialize)]
 #[wasm_bindgen]
 pub struct State {
     state: Vec<Vec<bool>>,
@@ -72,7 +72,12 @@ pub fn startup() {
 
 #[wasm_bindgen]
 pub fn handle_state(state: State) {
-    console::log_1(&"Received a state".into());
+    console::log_1(&serde_json::to_value(state).unwrap().to_string().into());
+    // store the tuples into local state (states, actions, rewards)
+}
 
-    console::log_1(&state.state.len().into());
+#[wasm_bindgen]
+pub fn handle_end() {
+    // use the local state tuples to train the model
+    // checkpoint the model into local state as well
 }
