@@ -1,3 +1,6 @@
+pub mod state;
+
+use crate::state::{add_frame, dump_game};
 use candle_core::{Device, Result, Tensor};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
@@ -23,7 +26,7 @@ const ACTION: Action = Action {
     stay: 0,
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[wasm_bindgen]
 pub struct State {
     state: Vec<Vec<bool>>,
@@ -72,12 +75,11 @@ pub fn startup() {
 
 #[wasm_bindgen]
 pub fn handle_state(state: State) {
-    console::log_1(&serde_json::to_value(state).unwrap().to_string().into());
-    // store the tuples into local state (states, actions, rewards)
+    // console::log_1(&serde_json::to_value(state).unwrap().to_string().into());
+    add_frame(state);
 }
 
 #[wasm_bindgen]
-pub fn handle_end() {
-    // use the local state tuples to train the model
-    // checkpoint the model into local state as well
+pub fn handle_end(outcome: bool) {
+    dump_game(outcome);
 }

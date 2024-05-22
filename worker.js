@@ -20,6 +20,22 @@ function send_state(state) {
   handle_state(State.new(data.flat(), dim));
 }
 
+// Can be used to display the state in the console
+function display_state(state) {
+  let dim = state.length;
+  let str = "";
+  for (let i = 0; i < dim; i++) {
+    for (let j = 0; j < dim; j++) {
+      if (state[i][j]) {
+        str += "X";
+      } else {
+        str += " ";
+      }
+    }
+    str += "\n";
+  }
+}
+
 self.onmessage = async (e) => {
   switch (e.data.type) {
     case "ping":

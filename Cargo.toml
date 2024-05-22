@@ -23,6 +23,7 @@ features = [
     'HtmlElement',
     'HtmlInputElement',
     'MessageEvent',
+    'Storage',
     'Window',
     'Worker',
 ]
