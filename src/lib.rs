@@ -1,9 +1,9 @@
+pub mod consts;
 pub mod model;
 pub mod state;
 
-use crate::state::{add_frame, dump_game, State};
+use crate::state::{add_frame, dump_game, read_model, write_model, Image, State};
 
-use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, Worker};
@@ -19,17 +19,21 @@ use web_sys::{console, Worker};
 pub fn startup() {
     let _worker_handle = Rc::new(RefCell::new(Worker::new("./worker.js").unwrap()));
     #[allow(unsafe_code)]
-    unsafe {
-        console::log_1(&"Created a new worker from within Wasm".into());
-    }
+    console::log_1(&"Created a new worker from within Wasm".into());
 }
 
 #[wasm_bindgen]
-pub fn handle_state(new_state: State) {
-    add_frame(new_state);
+pub fn handle_state(img: Image) -> u8 {
+    // infer with weights that you take from local storage here.
+    let model = read_model();
+    let inference = model.infer(img.clone());
+    add_frame(State::new(img, inference.dist, inference.choice));
+    return inference.choice;
 }
 
 #[wasm_bindgen]
 pub fn handle_end(outcome: bool) {
-    dump_game(outcome);
+    let model = read_model();
+    model.train(dump_game(outcome));
+    write_model(model);
 }

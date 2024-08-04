@@ -1,7 +1,7 @@
 importScripts("./pkg/pong_wasm.js");
 
 console.log("Initializing worker");
-const { Model, State, handle_state } = wasm_bindgen;
+const { Model, new_image, handle_state } = wasm_bindgen;
 
 const ACTION = {
   up: 1.0,
@@ -17,7 +17,7 @@ async function initialize() {
 function send_state(state) {
   let data = state;
   let dim = state.length;
-  handle_state(State.new(data.flat(), dim));
+  let choice = handle_state(new_image(data.flat(), dim));
 }
 
 // Can be used to display the state in the console

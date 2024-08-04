@@ -1,32 +1,53 @@
+use crate::model::Model;
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use web_sys::Storage;
+
+pub type Image = Vec<u8>;
+
+#[derive(Copy, Clone, Deserialize, Serialize)]
+#[wasm_bindgen]
+pub struct Distribution {
+    up: f64,
+    down: f64,
+    stay: f64,
+}
+
+impl Distribution {
+    pub fn new(up: f64, down: f64, stay: f64) -> Distribution {
+        Distribution { up, down, stay }
+    }
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 #[wasm_bindgen]
 pub struct State {
-    state: Vec<Vec<bool>>,
+    img: Image,
+    dist: Distribution,
+    choice: u8,
+}
+
+impl State {
+    pub fn new(img: Image, dist: Distribution, choice: u8) -> State {
+        State { img, dist, choice }
+    }
 }
 
 #[wasm_bindgen]
-impl State {
-    pub fn new(data: Vec<f64>, dimension: u16) -> State {
-        let mut state = Vec::new();
-        for i in 0..dimension {
-            let mut row = Vec::new();
-            for j in 0..dimension {
-                row.push(data[(i * dimension + j) as usize] > 0.5);
-            }
-            state.push(row);
+pub fn new_image(data: Vec<f64>, dimension: u16) -> Image {
+    let mut img = Vec::new();
+    for i in 0..dimension {
+        for j in 0..dimension {
+            img.push((data[(i * dimension + j) as usize] * 255.0) as u8);
         }
-        State { state }
     }
+    img
 }
 
 /// A representation of a full game
 #[derive(Clone, Deserialize, Serialize)]
 #[wasm_bindgen]
-struct Sequence {
+pub struct Sequence {
     /// The sequence of states
     sequence: Vec<State>,
     /// The outcome of the sequence
@@ -45,8 +66,29 @@ pub struct LocalState {
     current: Vec<State>,
 }
 
+/// Utility function to read a model from browser storage
+pub fn read_model() -> Model {
+    let window = web_sys::window().unwrap();
+    if let Some(storage) = window.local_storage().unwrap() {
+        if let Some(model) = storage.get_item("model").ok().unwrap() {
+            return serde_json::from_str(&model).ok().unwrap();
+        }
+    }
+    return Model::new();
+}
+
+/// Utility function to write a model to the browser storage
+pub fn write_model(model: Model) {
+    let window = web_sys::window().unwrap();
+    if let Some(storage) = window.local_storage().unwrap() {
+        storage
+            .set_item("model", &serde_json::to_string(&model).unwrap())
+            .unwrap();
+    }
+}
+
 /// Utility function to read a state from browser storage
-fn read_state() -> LocalState {
+pub fn read_state() -> LocalState {
     let window = web_sys::window().unwrap();
     if let Some(storage) = window.local_storage().unwrap() {
         if let Some(state) = storage.get_item("state").ok().unwrap() {
@@ -61,7 +103,7 @@ fn read_state() -> LocalState {
 }
 
 /// Utility function to write an update to the browser storage
-fn write_state(state: LocalState) {
+pub fn write_state(state: LocalState) {
     let window = web_sys::window().unwrap();
     if let Some(storage) = window.local_storage().unwrap() {
         storage
@@ -82,16 +124,17 @@ pub fn add_frame(frame: State) {
 }
 
 /// Dumps the current game to the history in browser storage
-pub fn dump_game(outcome: bool) {
+pub fn dump_game(outcome: bool) -> Sequence {
     let mut state = read_state();
     let new_history = Sequence {
         sequence: state.current.clone(),
         outcome,
     };
-    state.history.push(new_history);
+    state.history.push(new_history.clone());
     write_state(LocalState {
         weights: state.weights.clone(),
         history: state.history.clone(),
         current: Vec::new(),
     });
+    new_history
 }
