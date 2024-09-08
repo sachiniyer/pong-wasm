@@ -1,15 +1,28 @@
 const { startup } = wasm_bindgen;
 
 let worker;
+
+function set_data(key, value) {
+  window.localStorage.setItem(key, value);
+}
+
+function get_data(key) {
+  return window.localStorage.getItem(key);
+}
+
 async function run_wasm() {
   await wasm_bindgen();
   console.log("index.js loaded");
   startup();
 
   worker = new Worker("worker.js");
-  worker.postMessage("getGameBoard");
   worker.onmessage = function (e) {
-    console.log(e.data);
+    if (e.data.type == "setDataMain") {
+      set_data(e.data.key, e.data.value);
+    }
+    if (e.data.type == "getDataMain") {
+      worker.postMessage({ type: "getDataWorker", data: get_data(e.data.key) });
+    }
   };
 }
 
@@ -330,7 +343,7 @@ function gameLoop() {
   update();
   draw();
   if (worker) {
-    worker.postMessage({ type: "state", state: getGameBoard() });
+    // worker.postMessage({ topic: "state", data: getGameBoard().flat() });
   }
   setTimeout(gameLoop, 50);
 }

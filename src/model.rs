@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::*;
 #[derive(Clone)]
 #[wasm_bindgen]
 pub struct Model {
+    id: u8,
     w1: Tensor,
     w2: Tensor,
     val: bool,
@@ -22,17 +23,16 @@ pub struct Inference {
     pub choice: u8,
 }
 
-// implement Deserialize and Serialize for Model
-
 impl Serialize for Model {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
+        let id: u8 = self.id;
         let w1: Vec<f64> = self.w1.to_vec1().unwrap_throw();
         let w2: Vec<f64> = self.w2.to_vec1().unwrap_throw();
         let val = self.val;
-        let model = (w1, w2, val);
+        let model = (id, w1, w2, val);
         model.serialize(serializer)
     }
 }
@@ -43,10 +43,11 @@ impl<'de> Deserialize<'de> for Model {
         D: serde::Deserializer<'de>,
     {
         let device = Device::Cpu;
-        let (w1, w2, val): (Vec<f64>, Vec<f64>, bool) = Deserialize::deserialize(deserializer)?;
+        let (id, w1, w2, val): (u8, Vec<f64>, Vec<f64>, bool) =
+            Deserialize::deserialize(deserializer)?;
         let w1 = Tensor::from_vec(w1, (QUADRANTS, QUADRANTS), &device).unwrap_throw();
         let w2 = Tensor::from_vec(w2, (QUADRANTS, QUADRANTS), &device).unwrap_throw();
-        Ok(Model { w1, w2, val })
+        Ok(Model { id, w1, w2, val })
     }
 }
 
@@ -64,6 +65,7 @@ impl Model {
     pub fn new() -> Model {
         let device = Device::Cpu;
         Model {
+            id: 0,
             val: false,
             w1: Tensor::randn(0f32, 1.0, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
             w2: Tensor::randn(0f32, 1.0, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
