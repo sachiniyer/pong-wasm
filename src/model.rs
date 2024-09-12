@@ -6,8 +6,9 @@ use crate::{
 use candle_core::{Device, Tensor};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+use web_sys::js_sys::{Object, Reflect};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[wasm_bindgen]
 pub struct Model {
     id: u8,
@@ -16,39 +17,20 @@ pub struct Model {
     val: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+#[wasm_bindgen]
+pub struct ModelSerializer {
+    id: u8,
+    w1: Vec<f32>,
+    w2: Vec<f32>,
+    val: bool,
+}
+
 #[derive(Clone)]
 #[wasm_bindgen]
 pub struct Inference {
     pub dist: Distribution,
     pub choice: u8,
-}
-
-impl Serialize for Model {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let id: u8 = self.id;
-        let w1: Vec<f64> = self.w1.to_vec1().unwrap_throw();
-        let w2: Vec<f64> = self.w2.to_vec1().unwrap_throw();
-        let val = self.val;
-        let model = (id, w1, w2, val);
-        model.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Model {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Model, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let device = Device::Cpu;
-        let (id, w1, w2, val): (u8, Vec<f64>, Vec<f64>, bool) =
-            Deserialize::deserialize(deserializer)?;
-        let w1 = Tensor::from_vec(w1, (QUADRANTS, QUADRANTS), &device).unwrap_throw();
-        let w2 = Tensor::from_vec(w2, (QUADRANTS, QUADRANTS), &device).unwrap_throw();
-        Ok(Model { id, w1, w2, val })
-    }
 }
 
 /// The implementation of the model.
@@ -72,6 +54,17 @@ impl Model {
         }
     }
 
+    pub fn from_jsobject(model: JsValue) -> Result<Model, serde_wasm_bindgen::Error> {
+        let device = Device::Cpu;
+        let model: ModelSerializer = serde_wasm_bindgen::from_value(model)?;
+        Ok(Model {
+            id: model.id,
+            val: model.val,
+            w1: Tensor::from_vec(model.w1, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
+            w2: Tensor::from_vec(model.w2, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
+        })
+    }
+
     pub fn infer(&self, img: Image) -> Inference {
         Inference {
             dist: Distribution::new(0.0, 0.0, 1.0),
@@ -80,4 +73,29 @@ impl Model {
     }
 
     pub fn train(&self, seq: Sequence) {}
+
+    pub fn to_jsobject(&self) -> Result<Object, JsValue> {
+        let w1: Vec<f32> = self
+            .w1
+            .to_vec2()
+            .unwrap_throw()
+            .into_iter()
+            .flatten()
+            .collect();
+
+        let w2: Vec<f32> = self
+            .w2
+            .to_vec2()
+            .unwrap_throw()
+            .into_iter()
+            .flatten()
+            .collect();
+
+        let object = Object::new();
+        Reflect::set(&object, &"id".into(), &JsValue::from(self.id))?;
+        Reflect::set(&object, &"w1".into(), &JsValue::from(w1))?;
+        Reflect::set(&object, &"w2".into(), &JsValue::from(w2))?;
+        Reflect::set(&object, &"val".into(), &JsValue::from(self.val))?;
+        Ok(object)
+    }
 }

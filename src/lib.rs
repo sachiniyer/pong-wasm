@@ -2,12 +2,12 @@ pub mod consts;
 pub mod model;
 pub mod state;
 
-// use crate::state::{add_frame, dump_game, read_model, write_model, Image, State};
+use crate::state::{read_model, Image, State};
 
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
-use web_sys::{console, HtmlElement, HtmlInputElement, MessageEvent, Worker};
+use web_sys::{console, MessageEvent, Worker};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Event {
@@ -41,14 +41,20 @@ pub fn startup() {
     closure.forget(); // Keep the closure alive
 }
 
-// #[wasm_bindgen]
-// pub fn handle_img(img: Image) -> u8 {
-//     // infer with weights that you take from local storage here.
-//     let model = read_model();
-//     // let inference = model.infer(img.clone());
-//     // add_frame(State::new(img, inference.dist, inference.choice));
-//     0
-// }
+#[wasm_bindgen]
+pub async fn handle_img(img: Image) -> u8 {
+    // infer with weights that you take from local storage here.
+    let model = read_model().await;
+    match model {
+        Ok(m) => {
+            web_sys::console::log_1(&m.into());
+        }
+        Err(e) => web_sys::console::log_1(&format!("{:?}", e).into()),
+    }
+    // let inference = model.infer(img.clone());
+    // add_frame(State::new(img, inference.dist, inference.choice));
+    0
+}
 
 // #[wasm_bindgen]
 // pub fn handle_end(outcome: bool) {

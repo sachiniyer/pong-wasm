@@ -1,5 +1,5 @@
-use crate::model::Model;
-use crate::consts::{ DB_NAME, MODEL_STORE, STATE_STORE, MODEL_DB_KEY, MODEL_DB_KEY_VERSION };
+use crate::{model::Model,
+            consts::{ DB_NAME, MODEL_STORE, STATE_STORE, MODEL_DB_KEY, STATE_DB_KEY, MODEL_DB_KEY_VERSION }};
 
 use serde::{Deserialize, Serialize};
 
@@ -65,7 +65,7 @@ impl From<&str> for Lifecycle {
     fn from(s: &str) -> Lifecycle {
         match s {
             "current" => Lifecycle::Current,
-            "unprocessed" => Lifecycle::Unprocessed,
+            "unprocessed"  => Lifecycle::Unprocessed,
             "processed" => Lifecycle::Processed,
             _ => panic!("Invalid lifecycle")
         }
@@ -95,99 +95,103 @@ pub struct Sequence {
     lifecycle: Lifecycle,
 }
 
-pub async fn init_model_db() -> Result<()> {
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
-    if rexie.store_names().contains(&MODEL_STORE.to_string()) {
-        return Ok(());
-    }
-    let rexie = Rexie::builder(DB_NAME)
-       .version(1)
+/// Initializes the indexedDB database
+pub async fn init_db() -> Result<Rexie> {
+   let rexie = Rexie::builder(DB_NAME)
+       .version(9)
+       .add_object_store(
+           ObjectStore::new(STATE_STORE)
+               .key_path(STATE_DB_KEY)
+               .auto_increment(true)
+               .add_index(Index::new(STATE_DB_KEY, STATE_DB_KEY).unique(true))
+               .add_index(Index::new(STATE_STORE, STATE_STORE).unique(true))
+       )
        .add_object_store(
            ObjectStore::new(MODEL_STORE)
-               .key_path(MODEL_DB_KEY)
+               .key_path_array([MODEL_DB_KEY])
+               .auto_increment(false)
+               .add_index(Index::new(MODEL_DB_KEY, MODEL_DB_KEY).unique(true))
+
        )
        .build()
        .await?;
     let transaction = rexie.transaction(&[MODEL_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(MODEL_STORE)?;
-    let model = Model::new();
-    let model_js = serde_wasm_bindgen::to_value(&model).unwrap();
-    let key = Some(JsValue::from_f64(MODEL_DB_KEY_VERSION));
-    store.add(&model_js, key.as_ref()).await?;
-    return Ok(());
-}
-
-pub async fn init_model_state() -> Result<()> {
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
-    if rexie.store_names().contains(&STATE_STORE.to_string()) {
-        return Ok(());
+    let model_data = store.get_all(None, None).await?;
+    if model_data.is_empty() {
+        let model = Model::new();
+        match model.to_jsobject() {
+            Ok(o) =>  {
+                web_sys::console::log_1(&"Initializing DB with new model".into());
+                web_sys::console::log_1(&o);
+                store.put(&o.into(), None).await?;
+            },
+            Err(e) => {
+                web_sys::console::log_1(&e.into());
+            }
+        };
     }
-    Rexie::builder(DB_NAME)
-       .version(1)
-       .add_object_store(
-           ObjectStore::new(STATE_STORE)
-               .key_path("id")
-               .auto_increment(true)
-               .add_index(Index::new("lifecycle", "lifecycle").unique(false))
-       )
-       .build()
-       .await?;
-    Ok(())
+    transaction.done().await?;
+    Ok(rexie)
 }
 
 pub async fn get_current_game() -> Result<Sequence> {
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
+    let rexie = init_db().await?;
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadOnly)?;
     let store = transaction.store(STATE_STORE)?;
     let keyrange = KeyRange::only(&Lifecycle::Current.into())?;
     let state_js = store.get_all(Some(keyrange), None).await?;
+    transaction.done().await?;
     Ok(serde_wasm_bindgen::from_value::<Sequence>(state_js.first().into()).unwrap())
 }
 
 /// Utility function to read a model from browser storage
 pub async fn read_model() -> Result<Model> {
-    init_model_db().await?;
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
+    let rexie = init_db().await?;
     let transaction = rexie.transaction(&[MODEL_STORE], TransactionMode::ReadOnly)?;
     let store = transaction.store(MODEL_STORE)?;
     let key = Some(JsValue::from_f64(MODEL_DB_KEY_VERSION));
+
     let model_js = store.get(key.into()).await?;
-    let model: Model = serde_wasm_bindgen::from_value(model_js.into()).unwrap();
-    Ok(model)
+    match Model::from_jsobject(model_js.into()) {
+        Ok(m) => {
+            transaction.done().await?;
+            return Ok(m);
+        },
+        Err(e) => {
+            web_sys::console::log_1(&e.into());
+        }
+    }
+    Ok(Model::new())
 }
 
 /// Utility function to write a model to the browser storage
 pub async fn write_model(model: Model) -> Result<()> {
-    init_model_db().await?;
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
+    let rexie = init_db().await?;
     let transaction = rexie.transaction(&[MODEL_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(MODEL_STORE)?;
-    let model_js = serde_wasm_bindgen::to_value(&model).unwrap();
-    let key = Some(JsValue::from_f64(MODEL_DB_KEY_VERSION));
-    store.put(&model_js, key.as_ref()).await?;
+    match model.to_jsobject() {
+        Ok(o) =>  {
+            web_sys::console::log_1(&"Initializing DB with new model".into());
+            web_sys::console::log_1(&o);
+            store.put(&o.into(), None).await?;
+        },
+        Err(e) => {
+            web_sys::console::log_1(&e.into());
+        }
+    };
+    transaction.done().await?;
     Ok(())
 }
 
 /// Utility function to read a state from browser storage
 pub async fn read_unprocessed_states() -> Result<Vec<Sequence>> {
-    init_model_state().await?;
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
+    let rexie = init_db().await?;
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadOnly)?;
     let store = transaction.store(STATE_STORE)?;
     let keyrange = KeyRange::only(&Lifecycle::Unprocessed.into())?;
     let states_js = store.get_all(Some(keyrange), None).await?;
+    transaction.done().await?;
     Ok(states_js.iter().map(|state_js| {
         serde_wasm_bindgen::from_value::<Sequence>(state_js.into()).unwrap()
     }).collect::<Vec<_>>())
@@ -195,43 +199,37 @@ pub async fn read_unprocessed_states() -> Result<Vec<Sequence>> {
 
 /// Utility function to write an update to the browser storage
 pub async fn write_new_state(state: Sequence) -> Result<()> {
-    init_model_state().await?;
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
+    let rexie = init_db().await?;
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite).unwrap();
     let store = transaction.store(STATE_STORE).unwrap();
     let state_js = serde_wasm_bindgen::to_value(&state).unwrap();
     store.add(&state_js, None).await?;
+    transaction.done().await?;
     Ok(())
 }
 
 /// Adds a frame to the current game in browser storage
 pub async fn add_frame(frame: State) -> Result<()> {
-    init_model_state().await?;
     let mut state = get_current_game().await?;
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
+    let rexie = init_db().await?;
     state.sequence.push(frame);
     let state_js = serde_wasm_bindgen::to_value(&state).unwrap();
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(STATE_STORE)?;
     store.put(&state_js, Some(&JsValue::from(state.id))).await?;
+    transaction.done().await?;
     Ok(())
 }
 
 /// Dumps the current game to the history in browser storage
 pub async fn end_game(outcome: bool) -> Result<()>{
-    init_model_state().await?;
     let mut state = get_current_game().await?;
-    let rexie = Rexie::builder(DB_NAME)
-        .build()
-        .await?;
+    let rexie = init_db().await?;
     state.outcome = Some(outcome);
     let state_js = serde_wasm_bindgen::to_value(&state).unwrap();
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite).unwrap();
     let store = transaction.store(STATE_STORE).unwrap();
     store.put(&state_js, Some(&JsValue::from(state.id))).await?;
+    transaction.done().await?;
     Ok(())
 }

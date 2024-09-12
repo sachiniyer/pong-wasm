@@ -343,7 +343,7 @@ function gameLoop() {
   update();
   draw();
   if (worker) {
-    // worker.postMessage({ topic: "state", data: getGameBoard().flat() });
+    worker.postMessage({ topic: "state", data: getGameBoard().flat() });
   }
   setTimeout(gameLoop, 50);
 }
