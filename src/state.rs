@@ -3,13 +3,14 @@ use crate::{model::Model,
 
 use serde::{Deserialize, Serialize};
 
+use web_sys::js_sys::Array;
 use wasm_bindgen::prelude::*;
 use rexie::*;
 
 pub type Image = Vec<u8>;
 
 #[wasm_bindgen]
-#[derive(Copy, Clone, Deserialize, Serialize)]
+#[derive(Copy, Clone, Deserialize, Serialize, Debug)]
 pub struct Distribution {
     up: f64,
     down: f64,
@@ -57,16 +58,16 @@ pub enum Lifecycle {
 
 impl Lifecycle {
     pub fn new() -> Lifecycle {
-        Lifecycle::Unprocessed
+        Lifecycle::Current
     }
 }
 
 impl From<&str> for Lifecycle {
     fn from(s: &str) -> Lifecycle {
         match s {
-            "current" => Lifecycle::Current,
-            "unprocessed"  => Lifecycle::Unprocessed,
-            "processed" => Lifecycle::Processed,
+            "Current" => Lifecycle::Current,
+            "Unprocessed"  => Lifecycle::Unprocessed,
+            "Processed" => Lifecycle::Processed,
             _ => panic!("Invalid lifecycle")
         }
     }
@@ -75,9 +76,9 @@ impl From<&str> for Lifecycle {
 impl ToString for Lifecycle {
     fn to_string(&self) -> String {
         match self {
-            Lifecycle::Current => "current".to_string(),
-            Lifecycle::Unprocessed => "unprocessed".to_string(),
-            Lifecycle::Processed => "processed".to_string(),
+            Lifecycle::Current => "Current".to_string(),
+            Lifecycle::Unprocessed => "Unprocessed".to_string(),
+            Lifecycle::Processed => "Processed".to_string(),
         }
     }
 }
@@ -94,6 +95,18 @@ pub struct Sequence {
     /// Lifecycle of the sequence <CURRENT, UNPROCESSED, PROCESSED>
     lifecycle: Lifecycle,
 }
+
+impl Sequence {
+    pub fn new() -> Sequence {
+        Sequence {
+            id: 0.0,
+            sequence: Vec::new(),
+            outcome: None,
+            lifecycle: Lifecycle::new(),
+        }
+    }
+}
+
 
 /// Initializes the indexedDB database
 pub async fn init_db() -> Result<Rexie> {
@@ -139,10 +152,21 @@ pub async fn get_current_game() -> Result<Sequence> {
     let rexie = init_db().await?;
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadOnly)?;
     let store = transaction.store(STATE_STORE)?;
-    let keyrange = KeyRange::only(&Lifecycle::Current.into())?;
-    let state_js = store.get_all(Some(keyrange), None).await?;
+    let index = store.index(STATE_STORE)?;
+    let state_js = index.get(JsValue::from(Lifecycle::Current.to_string())).await?;
+    if state_js.is_none() {
+        web_sys::console::log_1(&"No current game found".into());
+        return Ok(Sequence::new());
+    }
+    let state_js = state_js.unwrap();
     transaction.done().await?;
-    Ok(serde_wasm_bindgen::from_value::<Sequence>(state_js.first().into()).unwrap())
+    Ok(match serde_wasm_bindgen::from_value::<Sequence>(state_js.clone()) {
+        Ok(s) => s,
+        Err(e) => {
+            web_sys::console::log_1(&e.into());
+            Sequence::new()
+        }
+    })
 }
 
 /// Utility function to read a model from browser storage
@@ -193,17 +217,29 @@ pub async fn read_unprocessed_states() -> Result<Vec<Sequence>> {
     let states_js = store.get_all(Some(keyrange), None).await?;
     transaction.done().await?;
     Ok(states_js.iter().map(|state_js| {
-        serde_wasm_bindgen::from_value::<Sequence>(state_js.into()).unwrap()
+        match serde_wasm_bindgen::from_value::<Sequence>(state_js.into()) {
+            Ok(s) => s,
+            Err(e) => {
+                web_sys::console::log_1(&e.into());
+                Sequence::new()
+            }
+        }
     }).collect::<Vec<_>>())
 }
 
 /// Utility function to write an update to the browser storage
 pub async fn write_new_state(state: Sequence) -> Result<()> {
     let rexie = init_db().await?;
-    let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite).unwrap();
-    let store = transaction.store(STATE_STORE).unwrap();
-    let state_js = serde_wasm_bindgen::to_value(&state).unwrap();
-    store.add(&state_js, None).await?;
+    let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite)?;
+    let store = transaction.store(STATE_STORE)?;
+    match serde_wasm_bindgen::to_value(&state){
+       Ok(o) => {
+           store.add(&o, None).await?;
+       },
+       Err(e) => {
+           web_sys::console::log_1(&e.into());
+       }
+    };
     transaction.done().await?;
     Ok(())
 }
@@ -213,10 +249,16 @@ pub async fn add_frame(frame: State) -> Result<()> {
     let mut state = get_current_game().await?;
     let rexie = init_db().await?;
     state.sequence.push(frame);
-    let state_js = serde_wasm_bindgen::to_value(&state).unwrap();
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(STATE_STORE)?;
-    store.put(&state_js, Some(&JsValue::from(state.id))).await?;
+    match serde_wasm_bindgen::to_value(&state){
+        Ok(o) => {
+            store.put(&o.into(), None).await?;
+        },
+        Err(e) => {
+            web_sys::console::log_1(&e.into());
+        }
+    };
     transaction.done().await?;
     Ok(())
 }
@@ -226,10 +268,16 @@ pub async fn end_game(outcome: bool) -> Result<()>{
     let mut state = get_current_game().await?;
     let rexie = init_db().await?;
     state.outcome = Some(outcome);
-    let state_js = serde_wasm_bindgen::to_value(&state).unwrap();
-    let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite).unwrap();
-    let store = transaction.store(STATE_STORE).unwrap();
-    store.put(&state_js, Some(&JsValue::from(state.id))).await?;
+    let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite)?;
+    let store = transaction.store(STATE_STORE)?;
+    match serde_wasm_bindgen::to_value(&state) {
+        Ok(o) => {
+            store.put(&o, Some(&JsValue::from(state.id))).await?;
+        },
+        Err(e) => {
+            web_sys::console::log_1(&e.into());
+        }
+    };
     transaction.done().await?;
     Ok(())
 }

@@ -2,7 +2,7 @@ pub mod consts;
 pub mod model;
 pub mod state;
 
-use crate::state::{read_model, Image, State};
+use crate::state::{read_model, add_frame, end_game, Image, State};
 
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
@@ -47,18 +47,24 @@ pub async fn handle_img(img: Image) -> u8 {
     let model = read_model().await;
     match model {
         Ok(m) => {
-            web_sys::console::log_1(&m.into());
+            let inference = m.infer(img.clone());
+            let add_frame_result = add_frame(State::new(img, inference.dist, inference.choice)).await;
+            if add_frame_result.is_err() {
+                web_sys::console::log_1(&format!("{:?}", add_frame_result).into());
+            }
         }
         Err(e) => web_sys::console::log_1(&format!("{:?}", e).into()),
     }
-    // let inference = model.infer(img.clone());
-    // add_frame(State::new(img, inference.dist, inference.choice));
     0
 }
 
-// #[wasm_bindgen]
-// pub fn handle_end(outcome: bool) {
-//     let model = read_model();
-//     model.train(dump_game(outcome));
-//     write_model(model);
-// }
+#[wasm_bindgen]
+pub async fn handle_end(outcome: bool) {
+    // let model = read_model();
+    // model.train(dump_game(outcome));
+    // write_model(model);
+    match end_game(outcome).await {
+       Ok(_) => web_sys::console::log_1(&"Game ended successfully".into()),
+        Err(e) => web_sys::console::log_1(&format!("{:?}", e).into()),
+    }
+}

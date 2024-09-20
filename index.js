@@ -198,10 +198,16 @@ function update() {
 
   if (ball.x <= 0) {
     p2.score++;
+    if (worker) {
+      worker.postMessage({ topic: "end", data: false });
+    }
     reset();
   }
   if (ball.x >= canvas.width) {
     p1.score++;
+    if (worker) {
+      worker.postMessage({ topic: "end", data: true });
+    }
     reset();
   }
 }

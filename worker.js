@@ -1,7 +1,7 @@
 importScripts("./pkg/pong_wasm.js");
 
 console.log("Initializing worker");
-const { Model, handle_img, new_image, startup } = wasm_bindgen;
+const { Model, handle_img, new_image, startup, handle_end } = wasm_bindgen;
 
 const ACTION = {
   up: 1.0,
@@ -20,6 +20,11 @@ async function send_state(state) {
   let dim = state.length;
   let choice = await handle_img(new_image(data.flat()));
   console.log(0);
+}
+
+async function send_end(outcome) {
+  await handle_end(outcome);
+  console.log("ended game");
 }
 
 // // Can be used to display the state in the console
@@ -46,6 +51,9 @@ self.onmessage = async (e) => {
       break;
     case "state":
       await send_state(e.data.data);
+      break;
+    case "end":
+      await send_end(e.data.data);
       break;
     default:
       break;

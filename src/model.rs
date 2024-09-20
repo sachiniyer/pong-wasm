@@ -26,7 +26,7 @@ pub struct ModelSerializer {
     val: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[wasm_bindgen]
 pub struct Inference {
     pub dist: Distribution,
