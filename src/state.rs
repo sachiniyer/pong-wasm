@@ -3,7 +3,6 @@ use crate::{model::Model,
 
 use serde::{Deserialize, Serialize};
 
-use web_sys::js_sys::Array;
 use wasm_bindgen::prelude::*;
 use rexie::*;
 
@@ -24,7 +23,7 @@ impl Distribution {
 }
 
 #[wasm_bindgen]
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct State {
     img: Image,
     dist: Distribution,
@@ -37,19 +36,18 @@ impl State {
     }
 }
 
-#[wasm_bindgen]
-pub fn new_image(data: Vec<f64>, dimension: u16) -> Image {
+pub fn new_image(data: Vec<u8>, dimension: usize) -> Image {
     let mut img = Vec::new();
     for i in 0..dimension {
         for j in 0..dimension {
-            img.push((data[(i * dimension + j) as usize] * 255.0) as u8);
+            img.push(data[i * dimension + j] * 255);
         }
     }
     img
 }
 
 #[wasm_bindgen]
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub enum Lifecycle {
     Current,
     Unprocessed,
@@ -85,7 +83,7 @@ impl ToString for Lifecycle {
 
 /// A representation of a full game
 #[wasm_bindgen]
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct Sequence {
     id: f64,
     /// The sequence of states
@@ -105,6 +103,14 @@ impl Sequence {
             lifecycle: Lifecycle::new(),
         }
     }
+    pub fn new_with_id(id: f64) -> Sequence {
+        Sequence {
+            id,
+            sequence: Vec::new(),
+            outcome: None,
+            lifecycle: Lifecycle::new(),
+        }
+    }
 }
 
 
@@ -117,7 +123,7 @@ pub async fn init_db() -> Result<Rexie> {
                .key_path(STATE_DB_KEY)
                .auto_increment(true)
                .add_index(Index::new(STATE_DB_KEY, STATE_DB_KEY).unique(true))
-               .add_index(Index::new(STATE_STORE, STATE_STORE).unique(true))
+               .add_index(Index::new(STATE_STORE, STATE_STORE).unique(false))
        )
        .add_object_store(
            ObjectStore::new(MODEL_STORE)
@@ -268,11 +274,23 @@ pub async fn end_game(outcome: bool) -> Result<()>{
     let mut state = get_current_game().await?;
     let rexie = init_db().await?;
     state.outcome = Some(outcome);
+    state.lifecycle = Lifecycle::Unprocessed;
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(STATE_STORE)?;
+    let id = state.id;
     match serde_wasm_bindgen::to_value(&state) {
         Ok(o) => {
-            store.put(&o, Some(&JsValue::from(state.id))).await?;
+            store.put(&o.into(), None).await?;
+        },
+        Err(e) => {
+            web_sys::console::log_1(&e.into());
+        }
+    };
+
+    let new_state = Sequence::new_with_id(id + 1.0);
+    match serde_wasm_bindgen::to_value(&new_state) {
+        Ok(o) => {
+            store.put(&o.into(), None).await?;
         },
         Err(e) => {
             web_sys::console::log_1(&e.into());

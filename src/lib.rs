@@ -2,7 +2,7 @@ pub mod consts;
 pub mod model;
 pub mod state;
 
-use crate::state::{read_model, add_frame, end_game, Image, State};
+use crate::state::{read_model, add_frame, end_game, new_image, Image, State};
 
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
@@ -42,8 +42,9 @@ pub fn startup() {
 }
 
 #[wasm_bindgen]
-pub async fn handle_img(img: Image) -> u8 {
+pub async fn handle_img(data: Vec<u8>, dimension: u8) -> u8 {
     // infer with weights that you take from local storage here.
+    let img = new_image(data, dimension.into());
     let model = read_model().await;
     match model {
         Ok(m) => {
