@@ -10,24 +10,6 @@ function get_data(key) {
   return window.localStorage.getItem(key);
 }
 
-async function run_wasm() {
-  await wasm_bindgen();
-  console.log("index.js loaded");
-  startup();
-
-  worker = new Worker("worker.js");
-  worker.onmessage = function (e) {
-    if (e.data.type == "setDataMain") {
-      set_data(e.data.key, e.data.value);
-    }
-    if (e.data.type == "getDataMain") {
-      worker.postMessage({ type: "getDataWorker", data: get_data(e.data.key) });
-    }
-  };
-}
-
-run_wasm();
-
 const canvas = document.getElementById("pongCanvas");
 const context = canvas.getContext("2d");
 let canvasWidth = window.innerWidth;
@@ -58,6 +40,37 @@ let ballConfig = {
   dx: 2.5,
   dy: 2.5,
 };
+
+class Button {
+  constructor(y, w, h, text) {
+    this.x = canvas.width / 2 - 50;
+    this.y = y;
+    this.w = w;
+    this.h = h;
+    this.text = text;
+  }
+
+  draw() {
+    context.fillStyle = "black";
+    context.fillRect(this.x, this.y, this.w, this.h);
+    context.font = "30px Hack";
+    context.fillStyle = "white";
+    context.fillText(this.text, this.x + 10, this.y + 30);
+  }
+
+  clicked(x, y) {
+    if (x >= this.x && x <= this.x + this.w) {
+      if (y >= this.y && y <= this.y + this.h) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  reset() {
+    this.x = canvas.width / 2 - 50;
+  }
+}
 
 class Paddle {
   constructor() {
@@ -148,6 +161,10 @@ let p2 = new Player(
   () => canvas.width - 100,
 );
 
+let trainButton = new Button(0, 200, 50, "TRAIN");
+let playAIButton = new Button(55, 200, 50, "PLAY AI");
+let humanButton = new Button(110, 200, 50, "PLAY HUMAN");
+
 let PlayerEnum = {
   ONE: "ONE",
   TWO: "TWO",
@@ -158,8 +175,10 @@ function draw() {
   p1.draw();
   p2.draw();
   ball.draw();
+  trainButton.draw();
+  playAIButton.draw();
+  humanButton.draw();
   context.font = "30px Hack";
-  context.fillText(title, canvas.width / 2 - 50, 50);
 }
 
 function reset() {
@@ -196,17 +215,17 @@ function update() {
 
   handleBallCollisions();
 
-  if (ball.x <= 0) {
+  if (ball.x + ball.size <= 0) {
     p2.score++;
     if (worker) {
-      worker.postMessage({ topic: "end", data: false });
+      worker.postMessage({ type: "end", data: false });
     }
     reset();
   }
-  if (ball.x >= canvas.width) {
+  if (ball.x - ball.size >= canvas.width) {
     p1.score++;
     if (worker) {
-      worker.postMessage({ topic: "end", data: true });
+      worker.postMessage({ type: "end", data: true });
     }
     reset();
   }
@@ -238,6 +257,29 @@ function movePlayer(player, direction) {
       break;
   }
 }
+
+window.addEventListener("click", function (event) {
+  const x = event.clientX;
+  const y = event.clientY;
+  if (trainButton.clicked(x, y)) {
+    console.log("Train");
+    if (worker) {
+      worker.postMessage({ type: "mode", data: "train" });
+    }
+  }
+  if (playAIButton.clicked(x, y)) {
+    console.log("Play AI");
+    if (worker) {
+      worker.postMessage({ type: "mode", data: "play" });
+    }
+  }
+  if (humanButton.clicked(x, y)) {
+    console.log("Play Human");
+    if (worker) {
+      worker.postMessage({ type: "mode", data: "human" });
+    }
+  }
+});
 
 window.addEventListener("keydown", function (event) {
   switch (event.key) {
@@ -305,13 +347,15 @@ window.addEventListener("resize", function () {
   p1.reset();
   p2.reset();
   ball.reset();
+  trainButton.reset();
+  playAIButton.reset();
+  humanButton.reset();
 });
 
 function getGameBoard() {
   let gameBoard = Array(QUADRANTS)
     .fill()
     .map(() => Array(QUADRANTS).fill(false));
-
   let p1X = Math.floor(p1.x / widthStep());
   let p1Y = Math.floor(p1.y / heightStep());
   let p1W = Math.floor(p1.paddle.w / widthStep());
@@ -349,9 +393,48 @@ function gameLoop() {
   update();
   draw();
   if (worker) {
-    worker.postMessage({ topic: "state", data: getGameBoard().flat() });
+    worker.postMessage({ type: "state", data: getGameBoard() });
   }
   setTimeout(gameLoop, 50);
 }
+
+async function run_wasm() {
+  await wasm_bindgen();
+  console.log("index.js loaded");
+  startup();
+
+  worker = new Worker("worker.js");
+  worker.onmessage = function (e) {
+    if (e.data.type == "setDataMain") {
+      set_data(e.data.key, e.data.value);
+    }
+    if (e.data.type == "getDataMain") {
+      worker.postMessage({ type: "getDataWorker", data: get_data(e.data.key) });
+    }
+
+    if (e.data.type == "movePlayer1") {
+      switch (e.data.data) {
+        case 1:
+          movePlayer(PlayerEnum.ONE, Direction.UP);
+          break;
+        case 2:
+          movePlayer(PlayerEnum.ONE, Direction.DOWN);
+          break;
+      }
+    }
+    if (e.data.type == "movePlayer2") {
+      switch (e.data.data) {
+        case 1:
+          movePlayer(PlayerEnum.TWO, Direction.UP);
+          break;
+        case 2:
+          movePlayer(PlayerEnum.TWO, Direction.DOWN);
+          break;
+      }
+    }
+  };
+}
+
+run_wasm();
 
 gameLoop();

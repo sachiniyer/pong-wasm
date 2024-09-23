@@ -2,7 +2,7 @@ pub mod consts;
 pub mod model;
 pub mod state;
 
-use crate::state::{read_model, add_frame, end_game, new_image, Image, State};
+use crate::state::{read_model, add_frame, end_game, State};
 
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
@@ -15,12 +15,6 @@ pub struct Event {
     data: String,
 }
 
-/*
- * PLAN:
- * - Use handle_state to take data for RL model
- * - Store weights in browser Storage (localStorage)
- * - On inference call, take state and publish results.
- */
 #[wasm_bindgen]
 pub fn startup() {
     let worker_handle = Rc::new(RefCell::new(Worker::new("./worker.js").unwrap()));
@@ -42,21 +36,23 @@ pub fn startup() {
 }
 
 #[wasm_bindgen]
-pub async fn handle_img(data: Vec<u8>, dimension: u8) -> u8 {
-    // infer with weights that you take from local storage here.
-    let img = new_image(data, dimension.into());
+pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
     let model = read_model().await;
     match model {
         Ok(m) => {
             let inference = m.infer(img.clone());
+            if !save {
+                return inference.choice;
+            }
             let add_frame_result = add_frame(State::new(img, inference.dist, inference.choice)).await;
             if add_frame_result.is_err() {
                 web_sys::console::log_1(&format!("{:?}", add_frame_result).into());
             }
+            return inference.choice;
         }
-        Err(e) => web_sys::console::log_1(&format!("{:?}", e).into()),
+        Err(e) => {web_sys::console::log_1(&format!("{:?}", e).into());},
     }
-    0
+    0 // something went wrong to get here -> but avoid panics
 }
 
 #[wasm_bindgen]

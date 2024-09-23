@@ -4,6 +4,7 @@ use crate::{
 };
 
 use candle_core::{Device, Tensor};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys::{Object, Reflect};
@@ -68,7 +69,8 @@ impl Model {
     pub fn infer(&self, img: Image) -> Inference {
         Inference {
             dist: Distribution::new(0.0, 0.0, 1.0),
-            choice: 1,
+            // random number of 1 or 2
+            choice: rand::thread_rng().gen_range(1..3) as u8,
         }
     }
 

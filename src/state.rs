@@ -36,16 +36,6 @@ impl State {
     }
 }
 
-pub fn new_image(data: Vec<u8>, dimension: usize) -> Image {
-    let mut img = Vec::new();
-    for i in 0..dimension {
-        for j in 0..dimension {
-            img.push(data[i * dimension + j] * 255);
-        }
-    }
-    img
-}
-
 #[wasm_bindgen]
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub enum Lifecycle {
@@ -117,7 +107,7 @@ impl Sequence {
 /// Initializes the indexedDB database
 pub async fn init_db() -> Result<Rexie> {
    let rexie = Rexie::builder(DB_NAME)
-       .version(9)
+       .version(1)
        .add_object_store(
            ObjectStore::new(STATE_STORE)
                .key_path(STATE_DB_KEY)
