@@ -4,7 +4,7 @@ use crate::{
 };
 
 use candle_core::{Device, Tensor};
-use rand::Rng;
+use candle_nn::ops::log_softmax;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys::{Object, Reflect};
@@ -66,16 +66,6 @@ impl Model {
         })
     }
 
-    pub fn infer(&self, img: Image) -> Inference {
-        Inference {
-            dist: Distribution::new(0.0, 0.0, 1.0),
-            // random number of 1 or 2
-            choice: rand::thread_rng().gen_range(1..3) as u8,
-        }
-    }
-
-    pub fn train(&self, seq: Sequence) {}
-
     pub fn to_jsobject(&self) -> Result<Object, JsValue> {
         let w1: Vec<f32> = self
             .w1
@@ -100,4 +90,30 @@ impl Model {
         Reflect::set(&object, &"val".into(), &JsValue::from(self.val))?;
         Ok(object)
     }
+
+    // https://karpathy.github.io/2016/05/31/rl/
+    // h = np.dot(W1, x) # compute hidden layer neuron activations
+    // h[h<0] = 0 # ReLU nonlinearity: threshold at zero
+    // logp = np.dot(W2, h) # compute log probability of going up
+    // p = 1.0 / (1.0 + np.exp(-logp)) # sigmoid function (gives probability of going up)
+    pub fn infer(&self, img: Image) -> Inference {
+        let input = Tensor::from_vec(img, (QUADRANTS, QUADRANTS), &Device::Cpu).unwrap_throw();
+        let h = self.w1.matmul(&input).unwrap_throw().relu().unwrap_throw();
+        let h2 = self.w2.matmul(&h).unwrap_throw();
+        let logp = log_softmax(&h2, 0).unwrap_throw();
+        let p = logp.exp().unwrap_throw();
+        let choice = p
+            .argmax(0)
+            .unwrap_throw()
+            .get(0)
+            .unwrap_throw()
+            .to_vec0::<u8>()
+            .unwrap_throw();
+        Inference {
+            dist: Distribution::new(0.0, 0.0, 1.0),
+            choice,
+        }
+    }
+
+    pub fn train(&self, seq: Sequence) {}
 }
