@@ -26,6 +26,16 @@ impl Distribution {
         let dist = WeightedIndex::new(&[self.up, self.down, self.stay]).unwrap();
         dist.sample(&mut rand::thread_rng()) as u8
     }
+
+    pub fn choice(&self) -> u8 {
+        let max = self.up.max(self.down).max(self.stay);
+        match max {
+            x if x == self.up => 0,
+            x if x == self.down => 1,
+            x if x == self.stay => 2,
+            _ => panic!("Invalid distribution")
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -39,6 +49,9 @@ pub struct State {
 impl State {
     pub fn new(img: Image, dist: Distribution, choice: u8) -> State {
         State { img, dist, choice }
+    }
+    pub fn to_tuple(&self) -> (Image, Distribution, u8) {
+        (self.img.clone(), self.dist, self.choice)
     }
 }
 
@@ -107,8 +120,22 @@ impl Sequence {
             lifecycle: Lifecycle::new(),
         }
     }
+    pub fn get_outcome(&self) -> Option<bool> {
+        self.outcome
+    }
+    pub fn len(&self) -> usize {
+        self.sequence.len()
+    }
 }
 
+impl IntoIterator for Sequence {
+    type Item = State;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.sequence.into_iter()
+    }
+}
 
 /// Initializes the indexedDB database
 pub async fn init_db() -> Result<Rexie> {

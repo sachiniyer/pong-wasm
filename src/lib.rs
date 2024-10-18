@@ -52,7 +52,7 @@ pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
         }
         Err(e) => {web_sys::console::log_1(&format!("{:?}", e).into());},
     }
-    0 // something went wrong to get here -> but avoid panics
+    0 // something went wrong to get here -> but avoid panics (because it can truncate logs)
 }
 
 #[wasm_bindgen]
