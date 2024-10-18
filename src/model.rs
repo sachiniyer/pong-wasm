@@ -1,5 +1,5 @@
 use crate::{
-    consts::QUADRANTS,
+    consts::{HIDDEN, QUADRANTS},
     state::{Distribution, Image, Sequence},
 };
 
@@ -50,8 +50,8 @@ impl Model {
         Model {
             id: 0,
             val: false,
-            w1: Tensor::randn(0f32, 1.0, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
-            w2: Tensor::randn(0f32, 1.0, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
+            w1: Tensor::randn(0f32, 1.0, (QUADRANTS, HIDDEN), &device).unwrap_throw(),
+            w2: Tensor::randn(0f32, 1.0, (HIDDEN, 3), &device).unwrap_throw(),
         }
     }
 
@@ -61,8 +61,8 @@ impl Model {
         Ok(Model {
             id: model.id,
             val: model.val,
-            w1: Tensor::from_vec(model.w1, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
-            w2: Tensor::from_vec(model.w2, (QUADRANTS, QUADRANTS), &device).unwrap_throw(),
+            w1: Tensor::from_vec(model.w1, (QUADRANTS, HIDDEN), &device).unwrap_throw(),
+            w2: Tensor::from_vec(model.w2, (HIDDEN, 3), &device).unwrap_throw(),
         })
     }
 
@@ -92,28 +92,18 @@ impl Model {
     }
 
     // https://karpathy.github.io/2016/05/31/rl/
-    // h = np.dot(W1, x) # compute hidden layer neuron activations
-    // h[h<0] = 0 # ReLU nonlinearity: threshold at zero
-    // logp = np.dot(W2, h) # compute log probability of going up
-    // p = 1.0 / (1.0 + np.exp(-logp)) # sigmoid function (gives probability of going up)
     pub fn infer(&self, img: Image) -> Inference {
         let input = Tensor::from_vec(img, (QUADRANTS, QUADRANTS), &Device::Cpu).unwrap_throw();
         let h = self.w1.matmul(&input).unwrap_throw().relu().unwrap_throw();
         let h2 = self.w2.matmul(&h).unwrap_throw();
         let logp = log_softmax(&h2, 0).unwrap_throw();
-        let p = logp.exp().unwrap_throw();
-        let choice = p
-            .argmax(0)
-            .unwrap_throw()
-            .get(0)
-            .unwrap_throw()
-            .to_vec0::<u8>()
-            .unwrap_throw();
-        Inference {
-            dist: Distribution::new(0.0, 0.0, 1.0),
-            choice,
-        }
+        let p = logp.exp().unwrap_throw().to_vec1().unwrap_throw();
+        let dist = Distribution::new(p[0], p[1], p[2]);
+        let choice = dist.sample();
+        Inference { dist, choice }
     }
 
-    pub fn train(&self, seq: Sequence) {}
+    pub fn train(&self, seq: Sequence) {
+        let device = Device::Cpu;
+    }
 }

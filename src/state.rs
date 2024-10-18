@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use wasm_bindgen::prelude::*;
 use rexie::*;
+use rand::distributions::{Distribution as RandDistribution, WeightedIndex};
 
 pub type Image = Vec<u8>;
 
@@ -19,6 +20,11 @@ pub struct Distribution {
 impl Distribution {
     pub fn new(up: f64, down: f64, stay: f64) -> Distribution {
         Distribution { up, down, stay }
+    }
+
+    pub fn sample(&self) -> u8 {
+        let dist = WeightedIndex::new(&[self.up, self.down, self.stay]).unwrap();
+        dist.sample(&mut rand::thread_rng()) as u8
     }
 }
 
