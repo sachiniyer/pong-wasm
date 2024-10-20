@@ -2,12 +2,13 @@ pub mod consts;
 pub mod model;
 pub mod state;
 
-use crate::state::{read_model, add_frame, end_game, State};
+use crate::state::{read_model, write_model, add_frame, end_game, read_unprocessed_states, State};
 
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, MessageEvent, Worker};
+use rexie::Error;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Event {
@@ -57,11 +58,23 @@ pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
 
 #[wasm_bindgen]
 pub async fn handle_end(outcome: bool) {
-    // let model = read_model();
-    // model.train(dump_game(outcome));
-    // write_model(model);
-    match end_game(outcome).await {
-        Ok(_) => web_sys::console::log_1(&"Game ended successfully".into()),
-        Err(e) => web_sys::console::log_1(&format!("{:?}", e).into()),
+    // create closure for training and train asynchronously
+    let train_wrapper =  async  {
+        end_game(outcome).await.unwrap_throw();
+        let mut model = read_model().await.unwrap_throw();
+        let unprocessed_states = read_unprocessed_states().await.unwrap_throw();
+        unprocessed_states.iter().for_each(|state| {
+            model.train(state);
+        });
+        let _ = write_model(model).await.unwrap_throw();
+        Ok::<(), Error>(())
+    };
+    match train_wrapper.await {
+        Ok(_) => {
+            web_sys::console::log_1(&"Training successful".into());
+        }
+        Err(e) => {
+            web_sys::console::log_1(&format!("{:?}", e).into());
+        }
     }
 }

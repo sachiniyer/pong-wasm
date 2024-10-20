@@ -99,28 +99,31 @@ impl Model {
 
     // https://karpathy.github.io/2016/05/31/rl/
     pub fn infer(&self, img: Image) -> Inference {
-        let input = Tensor::from_vec(
-            img,
-            (1, (QUADRANTS / RESOLUTION) * (QUADRANTS / RESOLUTION)),
-            &Device::Cpu,
-        )
-        .unwrap_throw()
-        .to_dtype(DType::F32)
-        .unwrap_throw();
-        let h1 = input.matmul(&self.w1).unwrap_throw().relu().unwrap_throw();
-        let h2 = h1.matmul(&self.w2).unwrap_throw();
-        let p = softmax(&h2, 1)
-            .unwrap_throw()
-            .flatten_all()
-            .unwrap_throw()
-            .to_vec1::<f32>()
-            .unwrap_throw();
-        let dist = Distribution::new(p[0], p[1], p[2]);
-        let choice = dist.sample();
-        Inference { dist, choice }
+        let infer_wrapper = || -> Result<Inference, candle_core::Error> {
+            let input = Tensor::from_vec(
+                img,
+                (1, (QUADRANTS / RESOLUTION) * (QUADRANTS / RESOLUTION)),
+                &Device::Cpu,
+            )?
+            .to_dtype(DType::F32)?;
+            let h1 = input.matmul(&self.w1)?.relu()?;
+            let h2 = h1.matmul(&self.w2)?;
+            let p = softmax(&h2, 1)?.flatten_all()?.to_vec1::<f32>()?;
+            let dist = Distribution::new(p[0], p[1], p[2]);
+            let choice = dist.sample();
+            Ok(Inference { dist, choice })
+        };
+        infer_wrapper().unwrap_or_else(|e| {
+            // panics are very hard to debug, so just log the error
+            web_sys::console::error_1(&e.to_string().into());
+            Inference {
+                dist: Distribution::new(0.0, 0.0, 0.0),
+                choice: 0,
+            }
+        })
     }
 
-    pub fn train(&mut self, seq: Sequence) {
+    pub fn train(&mut self, seq: &Sequence) {
         // let device = Device::Cpu;
         // let mut grad_w1 = Tensor::zeros((QUADRANTS, HIDDEN), DType::F32, &device).unwrap_throw();
         // let mut grad_w2 = Tensor::zeros((HIDDEN, 3), DType::F32, &device).unwrap_throw();
