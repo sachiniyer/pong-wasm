@@ -38,28 +38,28 @@ pub fn startup() {
 
 #[wasm_bindgen]
 pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
-    let model = read_model().await;
-    match model {
-        Ok(m) => {
-            let inference = m.infer(img.clone());
-            if !save {
-                return inference.choice;
-            }
-            let add_frame_result = add_frame(State::new(img, inference.dist, inference.choice)).await;
-            if add_frame_result.is_err() {
-                web_sys::console::log_1(&format!("{:?}", add_frame_result).into());
-            }
-            return inference.choice;
+    let handle_img_wrapper =  async {
+        let model = read_model().await.unwrap_throw();
+        let inference = model.infer(img.clone());
+        if save {
+            add_frame(State::new(img, inference.dist, inference.choice)).await.unwrap_throw();
         }
-        Err(e) => {web_sys::console::log_1(&format!("{:?}", e).into());},
+        Ok::<u8, Error>(inference.choice)
+    };
+    match handle_img_wrapper.await {
+        Ok(choice) => {
+            choice
+        }
+        Err(e) => {
+            web_sys::console::log_1(&format!("{:?}", e).into());
+            0
+        }
     }
-    0 // something went wrong to get here -> but avoid panics (because it can truncate logs)
 }
 
 #[wasm_bindgen]
 pub async fn handle_end(outcome: bool) {
-    // create closure for training and train asynchronously
-    let train_wrapper =  async  {
+    let train_wrapper =  async {
         end_game(outcome).await.unwrap_throw();
         let mut model = read_model().await.unwrap_throw();
         let unprocessed_states = read_unprocessed_states().await.unwrap_throw();
