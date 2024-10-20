@@ -61,7 +61,7 @@ pub async fn handle_end(outcome: bool) {
     // model.train(dump_game(outcome));
     // write_model(model);
     match end_game(outcome).await {
-       Ok(_) => web_sys::console::log_1(&"Game ended successfully".into()),
+        Ok(_) => web_sys::console::log_1(&"Game ended successfully".into()),
         Err(e) => web_sys::console::log_1(&format!("{:?}", e).into()),
     }
 }

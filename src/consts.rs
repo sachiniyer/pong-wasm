@@ -1,4 +1,5 @@
 pub const QUADRANTS: usize = 200;
+pub const RESOLUTION: usize = 10;
 pub const HIDDEN: usize = 200;
 pub const DB_NAME: &str = "pong";
 pub const MODEL_STORE: &str = "model";

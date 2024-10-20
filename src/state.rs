@@ -5,26 +5,30 @@ use serde::{Deserialize, Serialize};
 
 use wasm_bindgen::prelude::*;
 use rexie::*;
-use rand::distributions::{Distribution as RandDistribution, WeightedIndex};
+use web_sys::js_sys::Math::random;
 
 pub type Image = Vec<u8>;
 
 #[wasm_bindgen]
 #[derive(Copy, Clone, Deserialize, Serialize, Debug)]
 pub struct Distribution {
-    up: f64,
-    down: f64,
-    stay: f64,
+    up: f32,
+    down: f32,
+    stay: f32,
 }
 
 impl Distribution {
-    pub fn new(up: f64, down: f64, stay: f64) -> Distribution {
+    pub fn new(up: f32, down: f32, stay: f32) -> Distribution {
         Distribution { up, down, stay }
     }
 
     pub fn sample(&self) -> u8 {
-        let dist = WeightedIndex::new(&[self.up, self.down, self.stay]).unwrap();
-        dist.sample(&mut rand::thread_rng()) as u8
+        let rand = random() as f32;
+        match rand {
+            x if x < self.up => 0,
+            x if x < self.up + self.down => 1,
+            _ => 2
+        }
     }
 
     pub fn choice(&self) -> u8 {
