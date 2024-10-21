@@ -122,5 +122,14 @@ impl Model {
             }
         })
     }
-    pub fn train(&mut self, seq: &Sequence) {}
+    pub fn train(&mut self, seq: &Sequence) {
+        // grab all the states
+        // create the rewards for each of the states
+        // - was it a win or loss
+        // - how far in the cycle did it happen (discounted reward)
+        // modulate the gradients based on the discounted rewards (multiply)
+        // run backpropagation with the hidden states and the modulated gradients
+        // update the weights
+        // repeat until all states are trained on
+    }
 }
