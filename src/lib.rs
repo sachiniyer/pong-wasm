@@ -38,11 +38,16 @@ pub fn startup() {
 #[wasm_bindgen]
 pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
     let handle_img_wrapper =  async {
-        let model = read_model().await.unwrap_throw();
+        let model = read_model().await.unwrap_or_else(|e| {
+            web_sys::console::log_1(&format!("{:?}", e).into());
+            model::Model::new()
+        });
         let inference = model.infer(img.clone());
         let inference_choice = inference.choice;
         if save {
-            add_frame(State::new(img, inference)).await.unwrap_throw();
+            add_frame(State::new(img, inference)).await.unwrap_or_else(|e| {
+                web_sys::console::log_1(&format!("{:?}", e).into());
+            });
         }
         Ok::<u8, Error>(inference_choice)
     };
@@ -61,12 +66,20 @@ pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
 pub async fn handle_end(outcome: bool) {
     let train_wrapper =  async {
         end_game(outcome).await.unwrap_throw();
-        let mut model = read_model().await.unwrap_throw();
-        let unprocessed_states = read_unprocessed_states().await.unwrap_throw();
+        let mut model = read_model().await.unwrap_or_else(|e| {
+            web_sys::console::log_1(&format!("{:?}", e).into());
+            model::Model::new()
+        });
+        let unprocessed_states = read_unprocessed_states().await.unwrap_or_else(|e| {
+            web_sys::console::log_1(&format!("{:?}", e).into());
+            vec![]
+        });
         unprocessed_states.iter().for_each(|state| {
             model.train(state);
         });
-        let _ = write_model(model).await.unwrap_throw();
+        let _ = write_model(model).await.unwrap_or_else(|e| {
+            web_sys::console::log_1(&format!("{:?}", e).into());
+        });
         Ok::<(), Error>(())
     };
     match train_wrapper.await {

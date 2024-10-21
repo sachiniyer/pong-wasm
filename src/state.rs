@@ -142,7 +142,7 @@ impl Iterator for Sequence {
 /// Initializes the indexedDB database
 pub async fn init_db() -> Result<Rexie> {
    let rexie = Rexie::builder(DB_NAME)
-       .version(1)
+       .version(2)
        .add_object_store(
            ObjectStore::new(STATE_STORE)
                .key_path(STATE_DB_KEY)

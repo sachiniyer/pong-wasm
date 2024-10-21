@@ -64,28 +64,27 @@ impl Model {
         Ok(Model {
             id: model.id,
             val: model.val,
-            w1: Tensor::from_vec(model.w1, (QUADRANTS, HIDDEN), &device).unwrap_throw(),
-            w2: Tensor::from_vec(model.w2, (HIDDEN, 3), &device).unwrap_throw(),
+            w1: Tensor::from_vec(model.w1, (QUADRANTS, HIDDEN), &device).unwrap_or_else(|e| {
+                web_sys::console::error_1(&e.to_string().into());
+                Tensor::randn(0f32, 1.0, (QUADRANTS, HIDDEN), &device).unwrap_throw()
+            }),
+            w2: Tensor::from_vec(model.w2, (HIDDEN, 3), &device).unwrap_or_else(|e| {
+                web_sys::console::error_1(&e.to_string().into());
+                Tensor::randn(0f32, 1.0, (HIDDEN, 3), &device).unwrap_throw()
+            }),
         })
     }
 
     pub fn to_jsobject(&self) -> Result<Object, JsValue> {
-        let w1: Vec<f32> = self
-            .w1
-            .to_vec2()
-            .unwrap_throw()
-            .into_iter()
-            .flatten()
-            .collect();
-
-        let w2: Vec<f32> = self
-            .w2
-            .to_vec2()
-            .unwrap_throw()
-            .into_iter()
-            .flatten()
-            .collect();
-
+        let to_jsobject_wrapper = || -> Result<(Vec<f32>, Vec<f32>), candle_core::Error> {
+            let w1: Vec<f32> = self.w1.to_vec2()?.into_iter().flatten().collect();
+            let w2: Vec<f32> = self.w2.to_vec2()?.into_iter().flatten().collect();
+            Ok((w1, w2))
+        };
+        let (w1, w2) = to_jsobject_wrapper().unwrap_or_else(|e| {
+            web_sys::console::error_1(&e.to_string().into());
+            (Vec::new(), Vec::new())
+        });
         let object = Object::new();
         Reflect::set(&object, &"id".into(), &JsValue::from(self.id))?;
         Reflect::set(&object, &"w1".into(), &JsValue::from(w1))?;
@@ -111,7 +110,7 @@ impl Model {
             Ok(Inference {
                 dist,
                 choice,
-                hidden: h1.to_vec1()?,
+                hidden: h1.flatten_all()?.to_vec1()?,
             })
         };
         infer_wrapper().unwrap_or_else(|e| {
