@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{console, MessageEvent, Worker};
 use rexie::Error;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Event {
     topic: String,
     data: String,
@@ -25,7 +25,6 @@ pub fn startup() {
     let closure = Closure::wrap(Box::new(move |event: MessageEvent| {
         let data = event.data().as_string().unwrap();
         web_sys::console::log_1(&format!("Message from worker: {}", data).into());
-        // serialize data to Event struct
         let data = serde_json::from_str::<Event>(&data.clone()).unwrap();
         web_sys::console::log_1(&format!("Deserialized data: {:?}", data).into());
     }) as Box<dyn FnMut(MessageEvent)>);
@@ -41,10 +40,11 @@ pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
     let handle_img_wrapper =  async {
         let model = read_model().await.unwrap_throw();
         let inference = model.infer(img.clone());
+        let inference_choice = inference.choice;
         if save {
-            add_frame(State::new(img, inference.dist, inference.choice)).await.unwrap_throw();
+            add_frame(State::new(img, inference)).await.unwrap_throw();
         }
-        Ok::<u8, Error>(inference.choice)
+        Ok::<u8, Error>(inference_choice)
     };
     match handle_img_wrapper.await {
         Ok(choice) => {

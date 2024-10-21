@@ -1,4 +1,4 @@
-use crate::{model::Model,
+use crate::{model::{Model, Inference},
             consts::{ DB_NAME, MODEL_STORE, STATE_STORE, MODEL_DB_KEY, STATE_DB_KEY, MODEL_DB_KEY_VERSION }};
 
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use web_sys::js_sys::Math::random;
 pub type Image = Vec<u8>;
 
 #[wasm_bindgen]
-#[derive(Copy, Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Distribution {
     up: f32,
     down: f32,
@@ -43,24 +43,23 @@ impl Distribution {
 }
 
 #[wasm_bindgen]
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct State {
     img: Image,
-    dist: Distribution,
-    choice: u8,
+    infer: Inference,
 }
 
 impl State {
-    pub fn new(img: Image, dist: Distribution, choice: u8) -> State {
-        State { img, dist, choice }
+    pub fn new(img: Image, infer: Inference) -> State {
+        State { img, infer }
     }
-    pub fn to_tuple(&self) -> (Image, Distribution, u8) {
-        (self.img.clone(), self.dist, self.choice)
+    pub fn to_tuple(&self) -> (Image, Inference) {
+        (self.img.clone(), self.infer.clone())
     }
 }
 
 #[wasm_bindgen]
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Lifecycle {
     Current,
     Unprocessed,
@@ -96,7 +95,7 @@ impl ToString for Lifecycle {
 
 /// A representation of a full game
 #[wasm_bindgen]
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Sequence {
     id: f64,
     /// The sequence of states
@@ -132,12 +131,11 @@ impl Sequence {
     }
 }
 
-impl IntoIterator for Sequence {
+impl Iterator for Sequence {
     type Item = State;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.sequence.into_iter()
+    fn next(&mut self) -> Option<Self::Item> {
+        self.sequence.pop()
     }
 }
 

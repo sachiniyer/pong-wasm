@@ -10,7 +10,6 @@ use wasm_bindgen::prelude::*;
 use web_sys::js_sys::{Object, Reflect};
 
 #[derive(Clone, Debug)]
-#[wasm_bindgen]
 pub struct Model {
     id: u8,
     w1: Tensor,
@@ -18,8 +17,7 @@ pub struct Model {
     val: bool,
 }
 
-#[derive(Serialize, Deserialize)]
-#[wasm_bindgen]
+#[derive(Deserialize, Serialize)]
 pub struct ModelSerializer {
     id: u8,
     w1: Vec<f32>,
@@ -27,11 +25,11 @@ pub struct ModelSerializer {
     val: bool,
 }
 
-#[derive(Clone, Debug)]
-#[wasm_bindgen]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Inference {
     pub dist: Distribution,
     pub choice: u8,
+    pub hidden: Vec<f32>,
 }
 
 /// The implementation of the model.
@@ -43,7 +41,6 @@ pub struct Inference {
 /// - loss: cross-entropy
 ///
 /// The model is trained using Policy Gradient method.
-#[wasm_bindgen]
 impl Model {
     pub fn new() -> Model {
         let device = Device::Cpu;
@@ -111,75 +108,20 @@ impl Model {
             let p = softmax(&h2, 1)?.flatten_all()?.to_vec1::<f32>()?;
             let dist = Distribution::new(p[0], p[1], p[2]);
             let choice = dist.sample();
-            Ok(Inference { dist, choice })
+            Ok(Inference {
+                dist,
+                choice,
+                hidden: h1.to_vec1()?,
+            })
         };
         infer_wrapper().unwrap_or_else(|e| {
-            // panics are very hard to debug, so just log the error
             web_sys::console::error_1(&e.to_string().into());
             Inference {
                 dist: Distribution::new(0.0, 0.0, 0.0),
                 choice: 0,
+                hidden: Vec::new(),
             }
         })
     }
-
-    pub fn train(&mut self, seq: &Sequence) {
-        // let device = Device::Cpu;
-        // let mut grad_w1 = Tensor::zeros((QUADRANTS, HIDDEN), DType::F32, &device).unwrap_throw();
-        // let mut grad_w2 = Tensor::zeros((HIDDEN, 3), DType::F32, &device).unwrap_throw();
-        // let mut reward = 0.0;
-        // let mut logp = 0.0;
-        // let outcome = seq.get_outcome();
-        // let seqlen = seq.len();
-        // for state in seq.into_iter() {
-        //     let (img, action, reward_) = state.to_tuple();
-        //     let input = Tensor::from_vec(img, (QUADRANTS, QUADRANTS), &device).unwrap_throw();
-        //     let h = self.w1.matmul(&input).unwrap_throw().relu().unwrap_throw();
-        //     let h2 = self.w2.matmul(&h).unwrap_throw();
-        //     let logp_ = log_softmax(&h2, 0).unwrap_throw();
-        //     logp += logp_
-        //         .get(action.choice() as usize)
-        //         .unwrap_throw()
-        //         .to_vec0::<f32>()
-        //         .unwrap_throw();
-        //     reward += reward_ as f32;
-        //     let mut dlogp = Vec::new();
-        //     for i in 0..3 {
-        //         dlogp.push(if i == action.choice() as usize {
-        //             1.0 - logp_.get(i).unwrap_throw().to_vec0::<f32>().unwrap_throw()
-        //         } else {
-        //             -logp_.get(i).unwrap_throw().to_vec0::<f32>().unwrap_throw()
-        //         });
-        //     }
-        //     let dlogp = Tensor::from_vec(dlogp, (3,), &device).unwrap_throw();
-        //     grad_w2 = dlogp
-        //         .matmul(&h.t().unwrap_throw())
-        //         .unwrap_throw()
-        //         .add(&grad_w2)
-        //         .unwrap_throw();
-        //     grad_w1 = self
-        //         .w2
-        //         .t()
-        //         .unwrap_throw()
-        //         .matmul(&dlogp)
-        //         .unwrap_throw()
-        //         .matmul(&input.t().unwrap_throw())
-        //         .unwrap_throw()
-        //         .add(&grad_w1)
-        //         .unwrap_throw();
-        // }
-        // let reward = reward / seqlen as f32;
-        // let loss = -logp * reward;
-        // let lr = 0.01;
-        // self.w1 = grad_w1
-        //     .mul(&Tensor::from_vec(vec![lr], (1,), &device).unwrap_throw())
-        //     .unwrap_throw()
-        //     .sub(&self.w1)
-        //     .unwrap_throw();
-        // self.w2 = grad_w2
-        //     .mul(&Tensor::from_vec(vec![lr], (1,), &device).unwrap_throw())
-        //     .unwrap_throw()
-        //     .sub(&self.w2)
-        //     .unwrap_throw();
-    }
+    pub fn train(&mut self, seq: &Sequence) {}
 }
