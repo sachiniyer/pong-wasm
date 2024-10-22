@@ -122,6 +122,7 @@ impl Model {
             }
         })
     }
+
     pub fn train(&mut self, seq: &Sequence) {
         // grab all the states
         // create the rewards for each of the states
@@ -131,5 +132,50 @@ impl Model {
         // run backpropagation with the hidden states and the modulated gradients
         // update the weights
         // repeat until all states are trained on
+        let mut train_wrapper = || -> Result<(), candle_core::Error> {
+            let mut rewards = vec![0.0; seq.len()];
+            for i in (0..seq.len()).rev() {
+                let mut discounted_reward;
+                if seq.get_outcome().unwrap_throw() {
+                    discounted_reward = 1.0;
+                } else {
+                    discounted_reward = 0.0;
+                }
+                discounted_reward = 0.99 * discounted_reward;
+                rewards[i] = discounted_reward;
+            }
+            for i in 0..seq.len() {
+                let state = &seq.get_sequence()[i];
+                let reward = rewards[i];
+                let (image, inference) = state.to_tuple();
+                let choice = inference.choice;
+                let hidden = Tensor::from_vec(
+                    inference.hidden,
+                    ((QUADRANTS / RESOLUTION) * (QUADRANTS / RESOLUTION), HIDDEN),
+                    &Device::Cpu,
+                )?;
+                let dist = inference.dist.to_vec();
+                let mut d_h2 = Vec::new();
+                d_h2[0] = (dist[0] - if choice == 0 { 1.0 } else { 0.0 }) * reward;
+                d_h2[1] = (dist[1] - if choice == 1 { 1.0 } else { 0.0 }) * reward;
+                d_h2[2] = (dist[2] - if choice == 2 { 1.0 } else { 0.0 }) * reward;
+                let d_h2 = Tensor::from_vec(d_h2, (1, 3), &Device::Cpu)?;
+                let d_w2 = hidden.t()?.matmul(&d_h2)?;
+                let d_h1 = d_h2.matmul(&self.w2.t()?)?;
+                let d_w1 = Tensor::from_vec(
+                    image.to_vec(),
+                    (1, (QUADRANTS / RESOLUTION) * (QUADRANTS / RESOLUTION)),
+                    &Device::Cpu,
+                )?
+                .to_dtype(DType::F32)?
+                .t()?
+                .matmul(&d_h1)?;
+                self.w1 = self.w1.sub(&d_w1)?;
+                self.w2 = self.w2.sub(&d_w2)?;
+            }
+            Ok(())
+        };
+
+        train_wrapper().unwrap_or_else(|e| web_sys::console::error_1(&e.to_string().into()));
     }
 }

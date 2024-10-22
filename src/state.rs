@@ -1,10 +1,12 @@
-use crate::{model::{Model, Inference},
-            consts::{ DB_NAME, MODEL_STORE, STATE_STORE, MODEL_DB_KEY, STATE_DB_KEY, MODEL_DB_KEY_VERSION }};
+use crate::{
+    consts::{DB_NAME, MODEL_DB_KEY, MODEL_DB_KEY_VERSION, MODEL_STORE, STATE_DB_KEY, STATE_STORE},
+    model::{Inference, Model},
+};
 
 use serde::{Deserialize, Serialize};
 
-use wasm_bindgen::prelude::*;
 use rexie::*;
+use wasm_bindgen::prelude::*;
 use web_sys::js_sys::Math::random;
 
 pub type Image = Vec<u8>;
@@ -27,7 +29,7 @@ impl Distribution {
         match rand {
             x if x < self.up => 0,
             x if x < self.up + self.down => 1,
-            _ => 2
+            _ => 2,
         }
     }
 
@@ -37,8 +39,12 @@ impl Distribution {
             x if x == self.up => 0,
             x if x == self.down => 1,
             x if x == self.stay => 2,
-            _ => panic!("Invalid distribution")
+            _ => panic!("Invalid distribution"),
         }
+    }
+
+    pub fn to_vec(&self) -> Vec<f32> {
+        vec![self.up, self.down, self.stay]
     }
 }
 
@@ -55,6 +61,9 @@ impl State {
     }
     pub fn to_tuple(&self) -> (Image, Inference) {
         (self.img.clone(), self.infer.clone())
+    }
+    pub fn get_image(&self) -> &Image {
+        &self.img
     }
 }
 
@@ -76,9 +85,9 @@ impl From<&str> for Lifecycle {
     fn from(s: &str) -> Lifecycle {
         match s {
             "Current" => Lifecycle::Current,
-            "Unprocessed"  => Lifecycle::Unprocessed,
+            "Unprocessed" => Lifecycle::Unprocessed,
             "Processed" => Lifecycle::Processed,
-            _ => panic!("Invalid lifecycle")
+            _ => panic!("Invalid lifecycle"),
         }
     }
 }
@@ -129,6 +138,9 @@ impl Sequence {
     pub fn len(&self) -> usize {
         self.sequence.len()
     }
+    pub fn get_sequence(&self) -> &Vec<State> {
+        &self.sequence
+    }
 }
 
 impl Iterator for Sequence {
@@ -141,35 +153,34 @@ impl Iterator for Sequence {
 
 /// Initializes the indexedDB database
 pub async fn init_db() -> Result<Rexie> {
-   let rexie = Rexie::builder(DB_NAME)
-       .version(2)
-       .add_object_store(
-           ObjectStore::new(STATE_STORE)
-               .key_path(STATE_DB_KEY)
-               .auto_increment(true)
-               .add_index(Index::new(STATE_DB_KEY, STATE_DB_KEY).unique(true))
-               .add_index(Index::new(STATE_STORE, STATE_STORE).unique(false))
-       )
-       .add_object_store(
-           ObjectStore::new(MODEL_STORE)
-               .key_path_array([MODEL_DB_KEY])
-               .auto_increment(false)
-               .add_index(Index::new(MODEL_DB_KEY, MODEL_DB_KEY).unique(true))
-
-       )
-       .build()
-       .await?;
+    let rexie = Rexie::builder(DB_NAME)
+        .version(2)
+        .add_object_store(
+            ObjectStore::new(STATE_STORE)
+                .key_path(STATE_DB_KEY)
+                .auto_increment(true)
+                .add_index(Index::new(STATE_DB_KEY, STATE_DB_KEY).unique(true))
+                .add_index(Index::new(STATE_STORE, STATE_STORE).unique(false)),
+        )
+        .add_object_store(
+            ObjectStore::new(MODEL_STORE)
+                .key_path_array([MODEL_DB_KEY])
+                .auto_increment(false)
+                .add_index(Index::new(MODEL_DB_KEY, MODEL_DB_KEY).unique(true)),
+        )
+        .build()
+        .await?;
     let transaction = rexie.transaction(&[MODEL_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(MODEL_STORE)?;
     let model_data = store.get_all(None, None).await?;
     if model_data.is_empty() {
         let model = Model::new();
         match model.to_jsobject() {
-            Ok(o) =>  {
+            Ok(o) => {
                 web_sys::console::log_1(&"Initializing DB with new model".into());
                 web_sys::console::log_1(&o);
                 store.put(&o.into(), None).await?;
-            },
+            }
             Err(e) => {
                 web_sys::console::log_1(&e.into());
             }
@@ -184,20 +195,24 @@ pub async fn get_current_game() -> Result<Sequence> {
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadOnly)?;
     let store = transaction.store(STATE_STORE)?;
     let index = store.index(STATE_STORE)?;
-    let state_js = index.get(JsValue::from(Lifecycle::Current.to_string())).await?;
+    let state_js = index
+        .get(JsValue::from(Lifecycle::Current.to_string()))
+        .await?;
     if state_js.is_none() {
         web_sys::console::log_1(&"No current game found".into());
         return Ok(Sequence::new());
     }
     let state_js = state_js.unwrap();
     transaction.done().await?;
-    Ok(match serde_wasm_bindgen::from_value::<Sequence>(state_js.clone()) {
-        Ok(s) => s,
-        Err(e) => {
-            web_sys::console::log_1(&e.into());
-            Sequence::new()
-        }
-    })
+    Ok(
+        match serde_wasm_bindgen::from_value::<Sequence>(state_js.clone()) {
+            Ok(s) => s,
+            Err(e) => {
+                web_sys::console::log_1(&e.into());
+                Sequence::new()
+            }
+        },
+    )
 }
 
 /// Utility function to read a model from browser storage
@@ -212,7 +227,7 @@ pub async fn read_model() -> Result<Model> {
         Ok(m) => {
             transaction.done().await?;
             return Ok(m);
-        },
+        }
         Err(e) => {
             web_sys::console::log_1(&e.into());
         }
@@ -226,11 +241,11 @@ pub async fn write_model(model: Model) -> Result<()> {
     let transaction = rexie.transaction(&[MODEL_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(MODEL_STORE)?;
     match model.to_jsobject() {
-        Ok(o) =>  {
+        Ok(o) => {
             web_sys::console::log_1(&"Initializing DB with new model".into());
             web_sys::console::log_1(&o);
             store.put(&o.into(), None).await?;
-        },
+        }
         Err(e) => {
             web_sys::console::log_1(&e.into());
         }
@@ -247,15 +262,18 @@ pub async fn read_unprocessed_states() -> Result<Vec<Sequence>> {
     let keyrange = KeyRange::only(&Lifecycle::Unprocessed.into())?;
     let states_js = store.get_all(Some(keyrange), None).await?;
     transaction.done().await?;
-    Ok(states_js.iter().map(|state_js| {
-        match serde_wasm_bindgen::from_value::<Sequence>(state_js.into()) {
-            Ok(s) => s,
-            Err(e) => {
-                web_sys::console::log_1(&e.into());
-                Sequence::new()
-            }
-        }
-    }).collect::<Vec<_>>())
+    Ok(states_js
+        .iter()
+        .map(
+            |state_js| match serde_wasm_bindgen::from_value::<Sequence>(state_js.into()) {
+                Ok(s) => s,
+                Err(e) => {
+                    web_sys::console::log_1(&e.into());
+                    Sequence::new()
+                }
+            },
+        )
+        .collect::<Vec<_>>())
 }
 
 /// Utility function to write an update to the browser storage
@@ -263,13 +281,13 @@ pub async fn write_new_state(state: Sequence) -> Result<()> {
     let rexie = init_db().await?;
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(STATE_STORE)?;
-    match serde_wasm_bindgen::to_value(&state){
-       Ok(o) => {
-           store.add(&o, None).await?;
-       },
-       Err(e) => {
-           web_sys::console::log_1(&e.into());
-       }
+    match serde_wasm_bindgen::to_value(&state) {
+        Ok(o) => {
+            store.add(&o, None).await?;
+        }
+        Err(e) => {
+            web_sys::console::log_1(&e.into());
+        }
     };
     transaction.done().await?;
     Ok(())
@@ -282,10 +300,10 @@ pub async fn add_frame(frame: State) -> Result<()> {
     state.sequence.push(frame);
     let transaction = rexie.transaction(&[STATE_STORE], TransactionMode::ReadWrite)?;
     let store = transaction.store(STATE_STORE)?;
-    match serde_wasm_bindgen::to_value(&state){
+    match serde_wasm_bindgen::to_value(&state) {
         Ok(o) => {
             store.put(&o.into(), None).await?;
-        },
+        }
         Err(e) => {
             web_sys::console::log_1(&e.into());
         }
@@ -295,7 +313,7 @@ pub async fn add_frame(frame: State) -> Result<()> {
 }
 
 /// Dumps the current game to the history in browser storage
-pub async fn end_game(outcome: bool) -> Result<()>{
+pub async fn end_game(outcome: bool) -> Result<()> {
     let mut state = get_current_game().await?;
     let rexie = init_db().await?;
     state.outcome = Some(outcome);
@@ -306,7 +324,7 @@ pub async fn end_game(outcome: bool) -> Result<()>{
     match serde_wasm_bindgen::to_value(&state) {
         Ok(o) => {
             store.put(&o.into(), None).await?;
-        },
+        }
         Err(e) => {
             web_sys::console::log_1(&e.into());
         }
@@ -316,7 +334,7 @@ pub async fn end_game(outcome: bool) -> Result<()>{
     match serde_wasm_bindgen::to_value(&new_state) {
         Ok(o) => {
             store.put(&o.into(), None).await?;
-        },
+        }
         Err(e) => {
             web_sys::console::log_1(&e.into());
         }

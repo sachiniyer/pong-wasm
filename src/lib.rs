@@ -2,13 +2,13 @@ pub mod consts;
 pub mod model;
 pub mod state;
 
-use crate::state::{read_model, write_model, add_frame, end_game, read_unprocessed_states, State};
+use crate::state::{add_frame, end_game, read_model, read_unprocessed_states, write_model, State};
 
+use rexie::Error;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use web_sys::{console, MessageEvent, Worker};
-use rexie::Error;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Event {
@@ -37,7 +37,7 @@ pub fn startup() {
 
 #[wasm_bindgen]
 pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
-    let handle_img_wrapper =  async {
+    let handle_img_wrapper = async {
         let model = read_model().await.unwrap_or_else(|e| {
             web_sys::console::log_1(&format!("{:?}", e).into());
             model::Model::new()
@@ -45,16 +45,16 @@ pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
         let inference = model.infer(img.clone());
         let inference_choice = inference.choice;
         if save {
-            add_frame(State::new(img, inference)).await.unwrap_or_else(|e| {
-                web_sys::console::log_1(&format!("{:?}", e).into());
-            });
+            add_frame(State::new(img, inference))
+                .await
+                .unwrap_or_else(|e| {
+                    web_sys::console::log_1(&format!("{:?}", e).into());
+                });
         }
         Ok::<u8, Error>(inference_choice)
     };
     match handle_img_wrapper.await {
-        Ok(choice) => {
-            choice
-        }
+        Ok(choice) => choice,
         Err(e) => {
             web_sys::console::log_1(&format!("{:?}", e).into());
             0
@@ -64,7 +64,7 @@ pub async fn handle_img(img: Vec<u8>, save: bool) -> u8 {
 
 #[wasm_bindgen]
 pub async fn handle_end(outcome: bool) {
-    let train_wrapper =  async {
+    let train_wrapper = async {
         end_game(outcome).await.unwrap_throw();
         let mut model = read_model().await.unwrap_or_else(|e| {
             web_sys::console::log_1(&format!("{:?}", e).into());
