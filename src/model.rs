@@ -29,7 +29,7 @@ pub struct ModelSerializer {
 pub struct Inference {
     pub dist: Distribution,
     pub choice: u8,
-    pub hidden: Vec<f32>,
+    pub hidden: String,
 }
 
 /// The implementation of the model.
@@ -75,6 +75,26 @@ impl Model {
         })
     }
 
+    // the proper way to do this is the same deep js object creation we do for model...
+    // but, I'm lazy
+    pub fn serialize_hidden(tensor: &Tensor) -> Result<String, candle_core::Error> {
+        Ok(tensor
+            .flatten_all()?
+            .to_vec1::<f32>()?
+            .iter()
+            .map(|x| format!("{}", x))
+            .collect::<Vec<_>>()
+            .join(","))
+    }
+
+    pub fn deserialize_hidden(hidden: &str) -> Result<Tensor, candle_core::Error> {
+        let hidden = hidden
+            .split(",")
+            .map(|x| x.parse::<f32>().unwrap_throw())
+            .collect::<Vec<_>>();
+        Ok(Tensor::from_vec(hidden, (1, HIDDEN), &Device::Cpu)?)
+    }
+
     pub fn to_jsobject(&self) -> Result<Object, JsValue> {
         let to_jsobject_wrapper = || -> Result<(Vec<f32>, Vec<f32>), candle_core::Error> {
             let w1: Vec<f32> = self.w1.to_vec2()?.into_iter().flatten().collect();
@@ -110,7 +130,7 @@ impl Model {
             Ok(Inference {
                 dist,
                 choice,
-                hidden: h1.flatten_all()?.to_vec1()?,
+                hidden: Model::serialize_hidden(&h1)?,
             })
         };
         infer_wrapper().unwrap_or_else(|e| {
@@ -118,7 +138,7 @@ impl Model {
             Inference {
                 dist: Distribution::new(0.0, 0.0, 0.0),
                 choice: 0,
-                hidden: Vec::new(),
+                hidden: String::new(),
             }
         })
     }
@@ -149,17 +169,13 @@ impl Model {
                 let reward = rewards[i];
                 let (image, inference) = state.to_tuple();
                 let choice = inference.choice;
-                let hidden = Tensor::from_vec(
-                    inference.hidden,
-                    ((QUADRANTS / RESOLUTION) * (QUADRANTS / RESOLUTION), HIDDEN),
-                    &Device::Cpu,
-                )?;
+                let hidden = Model::deserialize_hidden(&inference.hidden)?;
                 let dist = inference.dist.to_vec();
-                let mut d_h2 = Vec::new();
+                let mut d_h2 = [0.0; 3];
                 d_h2[0] = (dist[0] - if choice == 0 { 1.0 } else { 0.0 }) * reward;
                 d_h2[1] = (dist[1] - if choice == 1 { 1.0 } else { 0.0 }) * reward;
                 d_h2[2] = (dist[2] - if choice == 2 { 1.0 } else { 0.0 }) * reward;
-                let d_h2 = Tensor::from_vec(d_h2, (1, 3), &Device::Cpu)?;
+                let d_h2 = Tensor::from_vec(d_h2.to_vec(), (1, 3), &Device::Cpu)?;
                 let d_w2 = hidden.t()?.matmul(&d_h2)?;
                 let d_h1 = d_h2.matmul(&self.w2.t()?)?;
                 let d_w1 = Tensor::from_vec(
