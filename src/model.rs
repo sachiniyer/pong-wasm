@@ -164,6 +164,16 @@ impl Model {
                 discounted_reward = 0.99 * discounted_reward;
                 rewards[i] = discounted_reward;
             }
+            web_sys::console::log_1(
+                &(rewards
+                    .clone()
+                    .into_iter()
+                    .reduce(|acc, i| (acc + i))
+                    .unwrap()
+                    / rewards.len() as f32)
+                    .to_string()
+                    .into(),
+            );
             for i in 0..seq.len() {
                 let state = &seq.get_sequence()[i];
                 let reward = rewards[i];
